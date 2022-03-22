@@ -613,9 +613,9 @@ def staticDownload(url, path):
 if __name__ == '__main__':
     #os.chdir(r'E:\我的文档\Python\python\bilibili')
     #path = r'.\0.mp4'
-    l = loginQR()
-    l.get()
-    l.show()
+    #l = loginQR()
+    #l.get()
+    #l.show()
     
     #cookies = load('cookies_lgq')
     #r = retrieval(cookies)
