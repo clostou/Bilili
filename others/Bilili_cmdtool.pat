@@ -1,0 +1,1 @@
+{"name": "Bilili_cmdtool", "search": {"has_group": 1, "name": "info.json", "tree": {"v": "video.m4s", "a": "audio.m4s", "d": "danmaku.xml", "e": "info.json", "c": "cover.jpg"}}, "parse": {"aid": "aid", "bid": null, "cid": "cid", "title": "title", "part_title": "title", "part_id": "index", "part_num": "total", "cover_url": "cover", "sid": "season_id"}}
