@@ -79,6 +79,8 @@ def login(user_name, new=False):
         l.get()
         l.show()
         if l.success:
+            if not os.path.exists(temp_path):
+                os.mkdir(temp_path)
             dump(l.cookies, cookies_path)
             changeUser(user_name, l.cookies)
         else:
