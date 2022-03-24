@@ -213,7 +213,7 @@ class favorite():
     def __init__(self, user):
         self.user = user
         self.path = os.path.join(temp_path, 'favorite.json')
-        if os.path.exists(path):
+        if os.path.exists(self.path):
             with open(self.path, 'r', encoding='utf-8') as fr:
                 js = json.loads(fr.read())
             self.list = js.get(user, [])
@@ -406,7 +406,7 @@ def mainLoop():
                     search_type = 1
                 else:
                     raise Exception
-                key_word = cut[2]
+                key_word = ' '.join(cut[2: ])
             except:
                 print("用法：search bangumi | ft {key_word}")
                 continue

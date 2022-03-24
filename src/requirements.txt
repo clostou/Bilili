@@ -1,5 +1,5 @@
-requests
-pillow
-qrcode
-tqdm
-pyinstaller
+requests>=2.27.0
+Pillow>=9.0.0
+qrcode>=7.3.0
+tqdm>=4.63.0
+pyinstaller>=4.10
