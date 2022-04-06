@@ -2,6 +2,7 @@ import os
 import json
 from bilili import *
 from colorama import init
+from time import strftime, localtime
 from datetime import datetime, timedelta
 
 
@@ -63,7 +64,7 @@ def changeUser(user_name, cookies):
 
 def failCheck(retrieval_ret):
     if isinstance(retrieval_ret, int):
-        if retrieval_ret > 0: 
+        if retrieval_ret > 0 or retrieval_ret == -200: 
             print("网络错误 (%i)\n" % retrieval_ret)
         else: 
             print("服务器拒绝请求 (%i)\n" % retrieval_ret)
@@ -221,21 +222,22 @@ class favorite():
             with open(self.path, 'w', encoding='utf-8') as fw:
                 fw.write(json.dumps({}))
             self.list = []
-        self.discard = []
+        self.discard = set()
 
     def add(self, dic):
+        if not isinstance(dic, dict): return
         dic['date'] = strftime('%Y.%m.%d', localtime())
         self.list.append(dic)
-        self.save()
+        self.refresh()
         print(" '%s' 已添加至收藏夹" % dic['title'])
 
     def delete(self, raw_str):
         ind = indexInput(raw_str, len(self.list))
         i = 0; n = len(ind)
         while i < n:
-            self.list[i] = None
+            self.list[ind[i]] = None
             i += 1
-        self.discard.extend(ind)
+        self.discard.update(ind)
 
     def get(self, index):
         ret = {}
@@ -250,17 +252,20 @@ class favorite():
         return ret
 
     def refresh(self):
-        if len(self.discard) > 0:
+        if self.discard:
             new_list = []
             i = 0; n = len(self.list)
-            j = self.discard.pop(0)
             while i < n:
-                if i == j:
-                    j = self.discard.pop(0)
-                else:
+                if i not in self.discard:
                     new_list.append(self.list[i])
                 i += 1
+            self.discard.clear()
             self.list = new_list
+        with open(self.path, 'r', encoding='utf-8') as fr:
+            js = json.loads(fr.read())
+        js[self.user] = self.list
+        with open(self.path, 'w', encoding='utf-8') as fw:
+            fw.write(json.dumps(js))
     
     def disp(self):
         self.refresh()
@@ -275,14 +280,6 @@ class favorite():
         print("-"*66 + "\n")
         s.set(self.list, 2)
         print("#活动的列表：%s的收藏夹\n" % self.user)
-
-    def save(self):
-        self.refresh()
-        with open(self.path, 'r', encoding='utf-8') as fr:
-            js = json.loads(fr.read())
-        js[self.user] = self.list
-        with open(self.path, 'w', encoding='utf-8') as fw:
-            fw.write(json.dumps(js))
 
 
 def download(sid, select_id, dir_path, auto_format=False):
@@ -493,7 +490,7 @@ def mainLoop():
 
 
 if __name__ == '__main__':
-    #os.chdir(work_path)
+    os.chdir(work_path)
     tag = name
     r = retrieval(None)
     s = select()

@@ -4,6 +4,7 @@ import threading
 
 from urllib.parse import urlencode
 import requests
+from copy import deepcopy
 
 import qrcode
 from tkinter import Tk, Label
@@ -14,7 +15,7 @@ import pickle
 import base64
 from hashlib import md5
 
-from time import sleep
+from time import sleep, perf_counter
 from ctypes import windll
 from tqdm import tqdm
 #from colorama import init; init(autoreset=True)
@@ -287,6 +288,7 @@ class retrieval():
         if isinstance(data, int): return data
         if data['numResults'] == 0: return []
         results = []
+        key_cols = ['title', 'org_title', 'cv', 'staff']
         for result in data['result']:
             res = self._dictCopy(\
                 result, 'media_type', 'media_id', 'season_id', \
@@ -297,11 +299,9 @@ class retrieval():
                 res['badges'] = ''
             else:
                 res['badges'] = result['badges'][0]['text']
-            if result['hit_columns']:
-                #cols = result['hit_columns']
-                cols = ['title', 'org_title', 'cv', 'staff']
-                for col in cols:
-                    res[col] = self._keyWord(res[col])
+            #key_cols = result['hit_columns']
+            for col in key_cols:
+                res[col] = self._keyWord(res[col])
             eps = []
             if result['hit_epids']:
                 for ep in result['eps']:
@@ -394,14 +394,15 @@ class multiDownload():
         self.pool = []
         self.num = threading_num
         self._started = False
-        self._stop = False
+        self._stop = True
+        self._abort = False
         self._exited = False
         if isinstance(url, list):
             self.url = url
         else:
             self.url = [url]
         self.kwargs = request_kwargs
-        self.chunk_size = 4 * 1048576
+        self.chunk_size = 1048576
 
         self.path = dst
         target_dir = os.path.dirname(dst)
@@ -431,7 +432,7 @@ class multiDownload():
         if process_bar:
             self.process = tqdm(total=self.file_size, initial=0, \
                                 unit='B', unit_scale=True, leave=False, \
-                                desc=os.path.basename(self.path))
+                                desc=filename)
         else:
             self.process = _tqdmLike(self.file_size, 0)
         
@@ -468,23 +469,27 @@ class multiDownload():
               self.is_partial))
 
     def _download(self, url_i, block_i, start, end):
-        with self.lock:
-            self.kwargs['headers']['Range'] = f'bytes={start}-{end}'
-            r = requests.get(self.url[url_i], \
-                             **self.kwargs, \
-                             timeout=3, \
-                             stream=True)
-            r.raise_for_status()
-            print(f"  Download thread of block-{block_i} start... ({r.headers['content-range']})")
+        kwargs = deepcopy(self.kwargs)
+        kwargs['headers']['Range'] = f'bytes={start}-{end}'
         f = self.temp_file[block_i - 1]
-        for chunk in r.iter_content(self.chunk_size):
-            length = f.write(chunk)
-            f.flush()
+        with requests.get(self.url[url_i], **kwargs, timeout=15, stream=True) as r:
             with self.lock:
-                self.process.update(length)
-            if self._stop:
-                break
-        r.close()
+                try:
+                    r.raise_for_status()
+                except Exception as e:
+                    print(repr(e))
+                    return
+                print(f"  Download thread of block-{block_i} start... ({r.headers['content-range']})")
+            while self._stop:
+                sleep(1)
+            for chunk in r.iter_content(self.chunk_size):
+                if chunk:
+                    length = f.write(chunk)
+                    f.flush()
+                    with self.lock:
+                        self.process.update(length)
+                if self._abort:
+                    break
 
     def start(self):
         def check(func):
@@ -526,6 +531,7 @@ class multiDownload():
         if self.pool:
             self._monitor = threading.Thread(target=check, args=(self.exit, ))
             self._monitor.start()
+            self._stop = False
         else:
             self.exit()
 
@@ -533,11 +539,11 @@ class multiDownload():
         self._monitor.join()
 
     def stop(self):
-        self._stop = True
+        self._abort = True
 
     def resume(self):
-        if self._exited or not self._stop: return
-        self._stop = False
+        if self._exited or not self._abort: return
+        self._abort = False
         self._started = False
         self.unfinished = True
         self.pool = []
@@ -551,7 +557,7 @@ class multiDownload():
     
     def exit(self):
         if not self._started: return
-        self._stop = True
+        self._abort = True
         self._exited = True
         for p in self.pool:
             p.join()
@@ -578,12 +584,13 @@ class multiDownload():
                 os.remove(self.index_file)
             if not os.listdir(self.temp_dir):
                 os.rmdir(self.temp_dir)
-            print("Download completed!")
+            print("Download completed!\n")
         else:
             if self.is_partial:
                 with open(self.index_file, 'wb') as f:
                     f.write(pickle.dumps(self.block))
             self._close()
+            print("Exit!\n")
 
 def biliDownload(url, path, sessdata, process_bar=True):
     header = {
@@ -618,7 +625,8 @@ if __name__ == '__main__':
     #l.show()
     
     #cookies = load('cookies_lgq')
-    #r = retrieval(cookies)
+    #r = retrieval(None)
+    #dictDisp(r.p_search("夏目友人帐")[0])
     #dictDisp(r.p_search("地球脉动", search_type=1)[0])
     #dictDisp(r.p_search("过于慎重")[0])
     #dictDisp(r.p_search("妹妹")[0])
