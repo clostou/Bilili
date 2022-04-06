@@ -394,9 +394,10 @@ class multiDownload():
         self.pool = []
         self.num = threading_num
         self._started = False
-        self._stop = True
         self._abort = False
         self._exited = False
+        self._stop = True
+        self._wait = 0
         if isinstance(url, list):
             self.url = url
         else:
@@ -480,8 +481,10 @@ class multiDownload():
                     print(repr(e))
                     return
                 print(f"  Download thread of block-{block_i} start... ({r.headers['content-range']})")
+            # 以下3行用于确保所有线程请求完毕后再开始下载
+            self._wait += 1
             while self._stop:
-                sleep(1)
+                sleep(0.5)
             for chunk in r.iter_content(self.chunk_size):
                 if chunk:
                     length = f.write(chunk)
@@ -512,8 +515,8 @@ class multiDownload():
                 resume_size = os.path.getsize(temp_file)
                 start = self.block[-i] + resume_size
                 self.temp_file.append(open(temp_file, 'ab+'))
-                self.process.update(resume_size)
             else:
+                resume_size = 0
                 start = self.block[-i]
                 self.temp_file.append(open(temp_file, 'wb+'))
             end = self.block[- (i + 1)] - 1
@@ -531,6 +534,9 @@ class multiDownload():
         if self.pool:
             self._monitor = threading.Thread(target=check, args=(self.exit, ))
             self._monitor.start()
+            while self._wait < self.num:
+                sleep(0.5)
+            self.process.update(resume_size)
             self._stop = False
         else:
             self.exit()
