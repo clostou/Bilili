@@ -1,5 +1,7 @@
-requests>=2.27.0
+colorama>=0.4.4
 Pillow>=9.0.0
-qrcode>=7.3.0
-tqdm>=4.63.0
+protobuf>=3.20.0
 pyinstaller>=4.10
+qrcode>=7.3.0
+requests>=2.27.0
+tqdm>=4.63.0

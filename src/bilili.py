@@ -2,9 +2,8 @@ import os
 import sys
 import threading
 
-from urllib.parse import urlencode
 import requests
-from copy import deepcopy
+from urllib.parse import urlencode
 
 import qrcode
 from tkinter import Tk, Label
@@ -15,15 +14,19 @@ import pickle
 import base64
 from hashlib import md5
 
+from copy import deepcopy
 from time import sleep, perf_counter
 from ctypes import windll
 from tqdm import tqdm
 #from colorama import init; init(autoreset=True)
 
+from io import StringIO
+import dm_pb2 as dm
+
 
 __all__ = ["dictDisp", "dump", "load", "loginQR", "retrieval",
            "multiDownload", "biliDownload", "staticDownload",
-           "work_path", "base_path", "temp_path"]
+           "danmuDownload", "work_path", "base_path", "temp_path"]
 
 
 work_path = os.getcwd()
@@ -375,14 +378,22 @@ class _tqdmLike():
 
     def __init__(self, total, initial):
         self.total = total
-        self.pos = initial
+        self.init = initial
+        self.n = initial
  
     def update(self, value):
-        value += self.pos
-        self.pos = min(max(0, value), self.total)
+        value += self.n
+        self.n = min(max(0, value), self.total)
+
+    def reset(self):
+        self.n = self.init
+    
+    def refresh(self):
+        pass
 
     def close(self):
         self.total = 0
+        self.init = 0
         self.update(0)
 
 
@@ -397,13 +408,14 @@ class multiDownload():
         self._abort = False
         self._exited = False
         self._stop = True
-        self._wait = 0
+        self._connectNum = 0
+        self.error_info = ''
         if isinstance(url, list):
             self.url = url
         else:
             self.url = [url]
         self.kwargs = request_kwargs
-        self.chunk_size = 1048576
+        self.chunk_size = 524288    # 512KB
 
         self.path = dst
         target_dir = os.path.dirname(dst)
@@ -419,10 +431,15 @@ class multiDownload():
         header = self.kwargs.get('headers', {})
         header['Range'] = 'bytes=0-'
         self.kwargs['headers'] = header
-        r = requests.get(self.url[0], **self.kwargs, timeout=3, stream=True)
-        #r.raise_for_status()
-        if not r.ok:
-            print("Fail to request (%s)" % r.status_code)
+        try:
+            error_code = -1
+            r = requests.get(self.url[0], **self.kwargs, timeout=3, stream=True)
+            error_code = r.status_code
+            r.raise_for_status()
+        except Exception as e:
+            self.error_info = repr(e)
+            print("Fail to request (%s)" % error_code)
+            self._exited = True
             return
         if r.status_code == 206:
             self.is_partial = True
@@ -448,7 +465,6 @@ class multiDownload():
             if self.unfinished:
                 self.block = record
                 self.num = len(self.block) - 2
-                self.process.update(self.block[0])
             else:
                 self.block = [0, self.file_size]
                 if self.num <= 0:
@@ -469,32 +485,76 @@ class multiDownload():
               self.num, \
               self.is_partial))
 
-    def _download(self, url_i, block_i, start, end):
-        kwargs = deepcopy(self.kwargs)
-        kwargs['headers']['Range'] = f'bytes={start}-{end}'
-        f = self.temp_file[block_i - 1]
-        with requests.get(self.url[url_i], **kwargs, timeout=15, stream=True) as r:
-            with self.lock:
-                try:
-                    r.raise_for_status()
-                except Exception as e:
-                    print(repr(e))
-                    return
-                print(f"  Download thread of block-{block_i} start... ({r.headers['content-range']})")
-            # 以下3行用于确保所有线程请求完毕后再开始下载
-            self._wait += 1
-            while self._stop:
-                sleep(0.5)
-            for chunk in r.iter_content(self.chunk_size):
-                if chunk:
-                    length = f.write(chunk)
-                    f.flush()
+    def _downThread(self, url_i, block_i, retry=1):
+        
+        def download(url, kwargs, file):
+            with requests.get(url, **kwargs, timeout=3, stream=True) as r:
+                r.raise_for_status()
+                if i == 0:
                     with self.lock:
-                        self.process.update(length)
-                if self._abort:
+                        print(f"  Download thread of block-{block_i} starts... ({r.headers['content-range']})")
+                # 以下3行用于确保所有线程连接完毕后再开始下载
+                self._connectNum += 1
+                while self._stop:
+                    sleep(0.5)
+                for chunk in r.iter_content(self.chunk_size):
+                    if chunk:
+                        length = file.write(chunk)
+                        file.flush()
+                        with self.lock:
+                            self.process.update(length)
+                    if self._abort:
+                        break
+        
+        kwargs = deepcopy(self.kwargs)
+        temp_file = os.path.join(self.temp_dir, hex(self.block[-block_i] + 16))
+        with self.lock:
+            self.temp_file.append(temp_file)
+        i = 0
+        if self.is_partial:
+            file = open(temp_file, 'ab')
+            if self.unfinished and os.path.exists(temp_file):
+                resume_size = os.path.getsize(temp_file)
+            else:
+                resume_size = 0
+            start = self.block[-block_i] + resume_size
+            end = self.block[- (block_i + 1)] - 1
+            self.process.n += resume_size
+            if start > end:
+                self._connectNum += 1
+            else:
+                while i <= retry:
+                    kwargs['headers']['Range'] = f'bytes={start}-{end}'
+                    try:
+                        download(self.url[url_i], kwargs, file)
+                    except Exception as e:
+                        self.error_info = repr(e)
+                    self._connectNum -= 1
+                    start = self.block[-block_i] + os.path.getsize(temp_file)
+                    if start > end or self._abort:
+                        break
+                    sleep(3)
+                    i += 1
+        else:
+            file = open(temp_file, 'wb')
+            kwargs['headers']['Range'] = f'bytes=0-'
+            while i <= retry:
+                file.seek(0)
+                with self.lock:
+                    self.process.reset()
+                try:
+                    download(self.url[url_i], kwargs, file)
+                except Exception as e:
+                    self.error_info = repr(e)
+                self._connectNum -= 1
+                if os.path.getsize(temp_file) >= self.file_size or self._abort:
                     break
+                sleep(3)
+                i += 1
+        file.close()
 
     def start(self):
+        
         def check(func):
             while True:
                 count = 0
@@ -505,27 +565,16 @@ class multiDownload():
                     break
                 else:
                     sleep(1)
-            func()
+            if not self._abort:
+                func()
+
         if self._started or self._exited: return
         self._started = True
         i = 1; j = 0
         while i <= self.num:
-            temp_file = os.path.join(self.temp_dir, hex(self.block[-i] + 16))
-            if os.path.exists(temp_file) and self.unfinished:
-                resume_size = os.path.getsize(temp_file)
-                start = self.block[-i] + resume_size
-                self.temp_file.append(open(temp_file, 'ab+'))
-            else:
-                resume_size = 0
-                start = self.block[-i]
-                self.temp_file.append(open(temp_file, 'wb+'))
-            end = self.block[- (i + 1)] - 1
-            if start >= end + 1:
-                i += 1; continue
-            
-            thread = threading.Thread(target=self._download, \
-                                      name=f'thread-%s' % i, \
-                                      args=(j, i, start, end))
+            thread = threading.Thread(target=self._downThread, \
+                                      name='downThread-%s' % i, \
+                                      args=(j, i, 3))
             self.pool.append(thread)
             i += 1; j += 1
             if j >= len(self.url): j = 0
@@ -534,32 +583,31 @@ class multiDownload():
         if self.pool:
             self._monitor = threading.Thread(target=check, args=(self.exit, ))
             self._monitor.start()
-            while self._wait < self.num:
+            while self._connectNum < self.num:
+                if self._exited:
+                    return
                 sleep(0.5)
-            self.process.update(resume_size)
+            self.process.refresh()
             self._stop = False
         else:
             self.exit()
 
     def join(self):
+        if not self._started or self._abort: return
         self._monitor.join()
 
     def stop(self):
+        if not self.is_partial: return
         self._abort = True
 
     def resume(self):
         if self._exited or not self._abort: return
         self._abort = False
         self._started = False
-        self.unfinished = True
-        self.pool = []
-        self._close()
-        self.temp_file = []
+        self.process.n = 0
+        self.pool.clear()
+        self.temp_file.clear()
         self.start()
-
-    def _close(self):
-        for f in self.temp_file:
-            f.close()
     
     def exit(self):
         if not self._started: return
@@ -567,36 +615,31 @@ class multiDownload():
         self._exited = True
         for p in self.pool:
             p.join()
-        self.block[0] = self.process.pos
+        self.block[0] = self.process.n
         self.process.close()
-        total_size = 0
-        for f in self.temp_file:
-            total_size += f.tell()
-        if self.block[0] >= self.block[1] or total_size >= self.block[1]:
-            copy_unit_size = 32 * 1048576
+        if self.block[0] >= self.block[1]:
+            copy_unit_size = 32 * 1048576    # 32MB
             with open(self.path, 'wb') as fw:
-                for fr in self.temp_file:
-                    fr.seek(0)
-                    while True:
-                        copy_unit = fr.read(copy_unit_size)
-                        if not copy_unit: break
-                        fw.write(copy_unit)
-            self._close()
-            i = 1
-            while i <= self.num:
-                os.remove(os.path.join(self.temp_dir, hex(self.block[-i] + 16)))
-                i += 1
+                for f in self.temp_file:
+                    with open(f, 'rb') as fr:
+                        while True:
+                            copy_unit = fr.read(copy_unit_size)
+                            if not copy_unit: break
+                            fw.write(copy_unit)
+                    os.remove(f)
             if os.path.exists(self.index_file):
                 os.remove(self.index_file)
             if not os.listdir(self.temp_dir):
                 os.rmdir(self.temp_dir)
             print("Download completed!\n")
+            self.success = True
         else:
             if self.is_partial:
                 with open(self.index_file, 'wb') as f:
                     f.write(pickle.dumps(self.block))
-            self._close()
             print("Exit!\n")
+            self.success = False
+
 
 def biliDownload(url, path, sessdata, process_bar=True):
     header = {
@@ -607,9 +650,10 @@ def biliDownload(url, path, sessdata, process_bar=True):
                       headers=header, params=appsign({}, *appkey[1]), cookies=sessdata)
     d.start()
     d.join()
+    return d.success
 
 
-def staticDownload(url, path):
+def staticDownload(url, path, params={}):
     header = {
         'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
         'Referer': 'https://www.bilibili.com/'
@@ -617,20 +661,94 @@ def staticDownload(url, path):
     r = requests.get(\
         url, \
         headers=header, \
+        params=params, \
         timeout=3)
     r.raise_for_status()
     with open(path, 'wb') as f:
         f.write(r.content)
 
 
+def _xmlEscape(text):
+    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')\
+           .replace('"', '&quot;').replace("'", '&apos;')
+
+
+def danmuDownload(cid, path, level=3, flag=0b000, cookies=None):
+    header = {
+    'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
+    'Referer': 'https://www.bilibili.com/'
+    }
+    params = {'type': 1, 'oid': cid, 'segment_index': 1}
+    url = 'https://api.bilibili.com/x/v2/dm/web/seg.so'
+    if flag == 0:
+        if level < 0 or level > 10:
+            print("Invalid level value (0-10)")
+            return
+        filt = lambda d: True if d.weight>level else False
+    else:
+        # bit0:保护 bit1:直播 bit2:高赞
+        if flag < 0:
+            print("Invalid flag value (>=0)")
+            return
+        filt = lambda d: True if d.attr&flag>0 else False
+    proto = dm.DmSegMobileReply()
+    buf = StringIO()
+    count_all = 0; count = 0
+    while True:
+        try:
+            r = requests.get(\
+                url, \
+                params=params, \
+                headers=header, \
+                cookies=cookies, \
+                timeout=3)
+            r.raise_for_status()
+        except:
+            return 0
+        proto.ParseFromString(r.content)
+        seg_n = len(proto.elems)
+        if seg_n > 0:
+            params['segment_index'] += 1
+            count_all += seg_n
+        else:
+            break
+        i =  0
+        while i < seg_n:
+            d = proto.elems[i]
+            if filt(d):
+                p = ','.join(\
+                    map(str, (d.progress/1000, d.mode, d.fontsize, d.color, \
+                              d.ctime, d.pool, d.midHash, d.idStr, d.weight)))
+                c = _xmlEscape(d.content.encode().decode())
+                buf.write(f'<d p="{p}">{c}</d>') 
+                #buf.write(f'<d p="{d.progress/1000},{d.mode},{d.fontsize},{d.color},{d.ctime},{d.pool},{d.midHash},{d.idStr},{d.weight}">{d.content.encode().decode()}</d>')
+                count += 1
+            i += 1
+    with open(path, 'w', encoding='utf-8') as fw:
+        if flag != 0:
+            fw.write(f'''<?xml version="1.0" encoding="UTF-8"?><i>\
+<chatserver>chat.bilibili.com</chatserver><chatid>{cid}</chatid>\
+<count>{count}</count><segment>{params['segment_index']-1}</segment>\
+<level>0</level><flag>{flag}</flag><state>0</state>''')
+        else:
+            fw.write(f'''<?xml version="1.0" encoding="UTF-8"?><i>\
+<chatserver>chat.bilibili.com</chatserver><chatid>{cid}</chatid>\
+<count>{count}</count><segment>{params['segment_index']-1}</segment>\
+<level>{level}</level><flag>{flag}</flag><state>0</state>''')
+        fw.write(buf.getvalue())
+        fw.write('</i>')
+    buf.close()
+    return count, count_all
+
+
 if __name__ == '__main__':
-    #os.chdir(r'E:\我的文档\Python\python\bilibili')
+    #os.chdir(r'E:\我的文档\Bilibili\PGC下载')
     #path = r'.\0.mp4'
     #l = loginQR()
     #l.get()
     #l.show()
     
-    #cookies = load('cookies_lgq')
+    #cookies = load(r'.\dist\data_bak\cookies_lgq')
     #r = retrieval(None)
     #dictDisp(r.p_search("夏目友人帐")[0])
     #dictDisp(r.p_search("地球脉动", search_type=1)[0])
@@ -651,5 +769,9 @@ if __name__ == '__main__':
     #d.stop()
     #d.resume()
     #d.exit()
+
+    #danmuDownload(29611963, 'danmu.xml')
+    #danmuDownload(29611963, 'danmu.xml', level=6)
+    #danmuDownload(29611963, 'danmu.xml', flag=0b101)
     pass
 
