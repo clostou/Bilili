@@ -86,6 +86,7 @@ class _QRWin(threading.Thread):
         self.qr_img = qr_img
         self._win = None
         self._text = None
+        self._quit = False
         self.start()
 
     def run(self):
@@ -108,11 +109,17 @@ class _QRWin(threading.Thread):
         self._text = text
         win.protocol('WM_DELETE_WINDOW', lambda: sys.exit(0))
         win.deiconify()
+        self._exit_hook()
         win.mainloop()
+
+    def _exit_hook(self):
+        self._win.after(500, self._exit_hook)
+        if self._quit:
+            self._win.destroy()
 
     def exit(self):
         if self.is_alive():
-            self._win.destroy()
+            self._quit = True
 
     def text(self, string):
         self._text.config(text=string)
@@ -409,6 +416,7 @@ class multiDownload():
         self._exited = False
         self._stop = True
         self._connectNum = 0
+        self.success = False
         self.error_info = ''
         if isinstance(url, list):
             self.url = url
@@ -641,15 +649,21 @@ class multiDownload():
             self.success = False
 
 
-def biliDownload(url, path, sessdata, process_bar=True):
+def biliDownload(url_dic, path, sessdata, process_bar=True):
     header = {
         'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
         'Referer': 'https://www.bilibili.com/'
         }
-    d = multiDownload(url, path, process_bar=process_bar, \
-                      headers=header, params=appsign({}, *appkey[1]), cookies=sessdata)
-    d.start()
-    d.join()
+    url_list= [url_dic['base_url']] + url_dic['backup_url']
+    i = 0
+    while True:
+        d = multiDownload(url_list[i], path, process_bar=process_bar, \
+                          headers=header, params=appsign({}, *appkey[1]), cookies=sessdata)
+        d.start()
+        d.join()
+        if d.success or i == 2: break
+        print("Changing download link ...")
+        i += 1
     return d.success
 
 
@@ -673,7 +687,7 @@ def _xmlEscape(text):
            .replace('"', '&quot;').replace("'", '&apos;')
 
 
-def danmuDownload(cid, path, level=3, flag=0b000, cookies=None):
+def danmuDownload(cid, path, level=3, flag=0b000, cookies=None, retry=1):
     header = {
     'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
     'Referer': 'https://www.bilibili.com/'
@@ -704,7 +718,11 @@ def danmuDownload(cid, path, level=3, flag=0b000, cookies=None):
                 timeout=3)
             r.raise_for_status()
         except:
-            return 0
+            if retry:
+                retry -= 1
+                continue
+            else:
+                return ()
         proto.ParseFromString(r.content)
         seg_n = len(proto.elems)
         if seg_n > 0:
@@ -748,8 +766,8 @@ if __name__ == '__main__':
     #l.get()
     #l.show()
     
-    #cookies = load(r'.\dist\data_bak\cookies_lgq')
-    #r = retrieval(None)
+    cookies = load(r'.\dist\data_bak\cookies_lgq')
+    r = retrieval(cookies)
     #dictDisp(r.p_search("夏目友人帐")[0])
     #dictDisp(r.p_search("地球脉动", search_type=1)[0])
     #dictDisp(r.p_search("过于慎重")[0])
@@ -759,6 +777,10 @@ if __name__ == '__main__':
     #dictDisp(r.p_review(28222736))
     #dictDisp(r.geturl(76392635, 130671984))
     #dictDisp(r.geturl(379104230, 107309283))    # 老视频不支持编码12
+    dictDisp(r.p_detail(28595))
+    dictDisp(r.p_review(28222693))
+    dictDisp(r.p_list(28595))
+    dictDisp(r.geturl(74758770, 127992675))
     
     #header = {
     #    'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',

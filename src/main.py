@@ -57,7 +57,7 @@ def indexInput(raw_str, max_value):
 def changeUser(user_name, cookies):
     global tag, f, r
     if f != None:
-        f.save()
+        f.refresh()
     tag = name + '(%s)' % user_name
     r = retrieval(cookies)
     f = favorite(user_name)
@@ -177,9 +177,12 @@ def search(key_word, search_type=0):
         print(tab + "|" + " "*74 + score)
         print(tab + "|")
         print(tab + "|")
-        time = datetime(1970, 1, 1) + timedelta(hours=8, seconds=res['pubtime'])
-        print(tab + "|    " + time.strftime("%Y年%m月%d日开播  ") + \
-              res['styles'])
+        if label != "未开播" and res['pubtime'] > 0:
+            time = datetime(1970, 1, 1) + timedelta(hours=8, seconds=res['pubtime'])
+            print(tab + "|    " + time.strftime("%Y年%m月%d日开播  ") + \
+                  res['styles'])
+        else:
+            print(tab + "|    " + res['styles'])
         print(tab + "|    " + detail['subtitle'])
         print(tab + "|")
         print(tab + "|" + "-"*94)
@@ -398,7 +401,7 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
         not_exist = True
         for dic in dash['video']:
             if dic['id'] == vq  and dic['codecid'] == vc:
-                ret_v = biliDownload(dic['base_url'], \
+                ret_v = biliDownload(dic, \
                                      join(path, 'video.m4s'), r.sess)
                 not_exist = False
                 break
@@ -407,19 +410,19 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
                 # 自动模式下防止中间某些视频无h.265编码格式
                 for dic in dash['video']:
                     if dic['id'] == vq and dic['codecid'] == 7:
-                        ret_v = biliDownload(dic['base_url'], \
+                        ret_v = biliDownload(dic, \
                                             join(path, 'video.m4s'), r.sess)
                         break
             else:
                 # 重新选择可用的清晰度
                 for dic in dash['video']:
                     if dic['id'] == max(access_vq) and dic['codecid'] == vc:
-                        ret_v = biliDownload(dic['base_url'], \
+                        ret_v = biliDownload(dic, \
                                             join(path, 'video.m4s'), r.sess)
                         break
         for dic in dash['audio']:
             if dic['id'] == aq:
-                ret_a = biliDownload(dic['base_url'], \
+                ret_a = biliDownload(dic, \
                                      join(path, 'audio.m4s'), r.sess)
                 break
         #staticDownload('https://comment.bilibili.com/%s.xml' % ep['cid'], \
