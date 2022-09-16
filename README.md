@@ -1,5 +1,5 @@
 # Bilili命令行工具
-![](https://img.shields.io/badge/Build-success-yellow) ![](https://img.shields.io/badge/FileVer.-1.1.2-orange) ![](https://img.shields.io/badge/Python-3.x-blue) ![](https://img.shields.io/badge/LICENSE-GPLv3-green)
+![](https://img.shields.io/badge/Build-success-yellow) ![](https://img.shields.io/badge/FileVer.-1.1.3-orange) ![](https://img.shields.io/badge/Python-3.x-blue) ![](https://img.shields.io/badge/LICENSE-GPLv3-green)
 ## 简介
 Bilili（哔哩哩）是一个基于Python3和哔哩哔哩API的命令行工具。该项目实现了B站番剧和影视等PGC类视频的多线程本地下载，还支持视频搜索、账号管理和简单的收藏夹功能。
 
