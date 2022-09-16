@@ -396,7 +396,11 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
             dmDown = Thread(target=danmuDownload, \
                             args=(ep['cid'], join(path, 'danmaku.xml')), \
                             kwargs={'level': dm, 'cookies': r.sess})
+            ccDown = Thread(target=ccDownload, \
+                            args=(ep['aid'], ep['cid'], path), \
+                            kwargs={'cookies': r.sess})
             dmDown.start()
+            ccDown.start()
         ret_v = False; ret_a = False
         not_exist = True
         for dic in dash['video']:

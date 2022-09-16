@@ -13,9 +13,10 @@ import json
 import pickle
 import base64
 from hashlib import md5
+import winreg
 
 from copy import deepcopy
-from time import sleep, perf_counter
+from time import sleep, perf_counter, strftime, gmtime
 from ctypes import windll
 from tqdm import tqdm
 #from colorama import init; init(autoreset=True)
@@ -24,9 +25,10 @@ from io import StringIO
 import dm_pb2 as dm
 
 
-__all__ = ["dictDisp", "dump", "load", "loginQR", "retrieval",
+__all__ = ["dictDisp", "dump", "load", "proxyServer", "loginQR", "retrieval",
            "multiDownload", "biliDownload", "staticDownload",
-           "danmuDownload", "work_path", "base_path", "temp_path"]
+           "danmuDownload", "ccDownload", "ipLocate",
+           "work_path", "base_path", "temp_path"]
 
 
 work_path = os.getcwd()
@@ -77,6 +79,38 @@ def load(path):
         else:
             obj = None
     return obj
+
+
+class proxyServer():
+    def __init__(self):
+        path = r'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+        self._regHandle = winreg.OpenKeyEx(winreg.HKEY_CURRENT_USER, path)
+        self._regQuery = lambda item_name: \
+                          winreg.QueryValueEx(self._regHandle, item_name)[0]
+        self.url = None
+        self.update()
+
+    def update(self):
+        try:
+            self.url = self._regQuery('ProxyServer')
+        except FileNotFoundError:
+            self.url = ''
+
+    def __call__(self):
+        try:
+            enable = self._regQuery('ProxyEnable')
+            if self.url and enable:
+                return {"http": None, "https": 'http://%s' % self.url}
+        except FileNotFoundError:
+            pass
+        return {"http": None, "https": None}
+
+    def __del__(self):
+        del self._regQuery
+        winreg.CloseKey(self._regHandle)
+
+
+Proxy = proxyServer()    # 检测系统代理
 
 
 class _QRWin(threading.Thread):
@@ -133,6 +167,7 @@ class loginQR():
             'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
             'Accept': 'application/json'
             }
+        self.proxy = {"http": None, "https": None}
         self.qr_url = None
         self.oauth_key = None
         self.cookies = requests.cookies.RequestsCookieJar()
@@ -142,7 +177,7 @@ class loginQR():
         try:
             r = requests.get(\
                 'https://passport.bilibili.com/qrcode/getLoginUrl', \
-                params=appsign({}, *appkey[0]), \
+                params=appsign({}, *appkey[0]), proxies = self.proxy, \
                 timeout=3)
         except:
             print("网络错误 (-200)\n")
@@ -178,6 +213,7 @@ class loginQR():
                     headers=self.header, \
                     data=params, \
                     cookies=self.cookies, \
+                    proxies = self.proxy, \
                     timeout=3)
             except:
                 print("网络错误 (-200)\n")
@@ -258,6 +294,7 @@ class retrieval():
                 headers=self.header, \
                 params=appsign(params, *appkey[sign]), \
                 cookies=self.sess, \
+                proxies=Proxy(), \
                 timeout=3)
         except:
             return -200
@@ -440,7 +477,7 @@ class multiDownload():
         header['Range'] = 'bytes=0-'
         self.kwargs['headers'] = header
         try:
-            error_code = -1
+            error_code = -200
             r = requests.get(self.url[0], **self.kwargs, timeout=3, stream=True)
             error_code = r.status_code
             r.raise_for_status()
@@ -655,19 +692,20 @@ def biliDownload(url_dic, path, sessdata, process_bar=True):
         'Referer': 'https://www.bilibili.com/'
         }
     url_list= [url_dic['base_url']] + url_dic['backup_url']
-    i = 0
+    i = 0; end_i = len(url_list) - 1
     while True:
         d = multiDownload(url_list[i], path, process_bar=process_bar, \
-                          headers=header, params=appsign({}, *appkey[1]), cookies=sessdata)
+                          headers=header, params=appsign({}, *appkey[1]), \
+                          proxies=Proxy(), cookies=sessdata)
         d.start()
         d.join()
-        if d.success or i == 2: break
+        if d.success or i == end_i: break
         print("Changing download link ...")
         i += 1
     return d.success
 
 
-def staticDownload(url, path, params={}):
+def staticDownload(url, path=None, params={}):
     header = {
         'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
         'Referer': 'https://www.bilibili.com/'
@@ -676,10 +714,15 @@ def staticDownload(url, path, params={}):
         url, \
         headers=header, \
         params=params, \
+        proxies=Proxy(), \
         timeout=3)
     r.raise_for_status()
-    with open(path, 'wb') as f:
-        f.write(r.content)
+    if path:
+        with open(path, 'wb') as f:
+            f.write(r.content)
+        return
+    else:
+        return r.content
 
 
 def _xmlEscape(text):
@@ -689,11 +732,13 @@ def _xmlEscape(text):
 
 def danmuDownload(cid, path, level=3, flag=0b000, cookies=None, retry=1):
     header = {
-    'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
-    'Referer': 'https://www.bilibili.com/'
+        'Host': 'api.bilibili.com',
+        'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
+        'Referer': 'https://www.bilibili.com/'
     }
     params = {'type': 1, 'oid': cid, 'segment_index': 1}
     url = 'https://api.bilibili.com/x/v2/dm/web/seg.so'
+    proxy = Proxy()
     if flag == 0:
         if level < 0 or level > 10:
             print("Invalid level value (0-10)")
@@ -715,6 +760,7 @@ def danmuDownload(cid, path, level=3, flag=0b000, cookies=None, retry=1):
                 params=params, \
                 headers=header, \
                 cookies=cookies, \
+                proxies=proxy, \
                 timeout=3)
             r.raise_for_status()
         except:
@@ -759,6 +805,89 @@ def danmuDownload(cid, path, level=3, flag=0b000, cookies=None, retry=1):
     return count, count_all
 
 
+def _ccList2srt(cclist, **font_args):
+    
+    def timeTrans(time):
+        cut = str(time).partition('.')
+        intTime = strftime('%H:%M:%S', gmtime(time))
+        digits = len(cut[2])
+        if digits == 0: decTime = '000'
+        elif digits == 1: decTime = cut[2] + '00'
+        elif digits == 2: decTime = cut[2] + '0'
+        else: decTime = cut[2]
+        return f'{intTime}.{decTime}'
+    
+    fn = font_args.get('fn')
+    fs = font_args.get('fs', 14)
+    fc = font_args.get('fc')
+    if fn != None:
+        head = r'{\fn%s\fs%s}' % (fn, fs)
+    else:
+        head = r'{\fs%s}' % fs
+    if fc != None:
+        head = '<font color=%s>' % fc + head
+    buf = StringIO()
+    for i, line in enumerate(cclist):
+        tag = f"{i+1}\n{timeTrans(line['from'])} --> {timeTrans(line['to'])}\n"
+        _line = tag + head + line['content'] + '\n\n'
+        buf.write(_line)
+    return buf
+
+
+def ccDownload(aid, cid, path, cookies=None):
+    header = {
+        'Host': 'api.bilibili.com',
+        'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
+        'Referer': 'https://www.bilibili.com/'
+    }
+    params = {'aid': aid, 'cid': cid}
+    url = 'https://api.bilibili.com/x/web-interface/view'
+    try:
+        r = requests.get(url, \
+                         params=params, \
+                         headers = header, \
+                         cookies=cookies, \
+                         proxies=Proxy(), \
+                         timeout=3)
+    except:
+        return -200
+    if not r.ok:
+        return r.status_code
+    js = r.json()
+    if js['code']:
+        return js['code']
+    subtitles = js['data']['subtitle']['list']
+    if len(subtitles) == 0:
+        return 0
+    for item in subtitles:
+        subtitle_data = json.loads(staticDownload(item['subtitle_url']))
+        srt_data = _ccList2srt(subtitle_data['body'])
+        _path = os.path.join(path, '%s.srt' % item['lan'])
+        with open(_path, 'w', encoding='utf-8') as f:
+            f.write(srt_data.getvalue())
+    return 0
+
+
+def ipLocate():
+    print("---ip地理位置查询......", end='')
+    try:
+        error_code = -200
+        r = requests.get('https://api.bilibili.com/x/web-interface/zone', \
+                         proxies=Proxy(), \
+                         timeout=3)
+        error_code = r.status_code
+        r.raise_for_status()
+    except Exception as e:
+        print(f"失败\n    {error_code}): {repr(e)}\n")
+    else:
+        js = r.json()
+        if js['code']:
+            print(f"失败\n{js['code']}):    {js['message']}\n")
+        else:
+            print("成功")
+            dictDisp(js['data'])
+
+
 if __name__ == '__main__':
     #os.chdir(r'E:\我的文档\Bilibili\PGC下载')
     #path = r'.\0.mp4'
@@ -777,10 +906,11 @@ if __name__ == '__main__':
     #dictDisp(r.p_review(28222736))
     #dictDisp(r.geturl(76392635, 130671984))
     #dictDisp(r.geturl(379104230, 107309283))    # 老视频不支持编码12
-    dictDisp(r.p_detail(28595))
-    dictDisp(r.p_review(28222693))
-    dictDisp(r.p_list(28595))
-    dictDisp(r.geturl(74758770, 127992675))
+    
+    #dictDisp(r.p_detail(28595))
+    #dictDisp(r.p_review(28222693))
+    #dictDisp(r.p_list(28595))
+    #dictDisp(r.geturl(74758770, 127992675))
     
     #header = {
     #    'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
@@ -795,5 +925,12 @@ if __name__ == '__main__':
     #danmuDownload(29611963, 'danmu.xml')
     #danmuDownload(29611963, 'danmu.xml', level=6)
     #danmuDownload(29611963, 'danmu.xml', flag=0b101)
+
+    #r = retrieval(None)
+    #dictDisp(r.p_detail(41472))
+    #dictDisp(r.p_list(41472))
+    #ccDownload(937955841, 567929070, r'.\')
+
+    #ipLocate()
     pass
 
