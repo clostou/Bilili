@@ -483,7 +483,7 @@ class multiDownload():
             r.raise_for_status()
         except Exception as e:
             self.error_info = repr(e)
-            print("Fail to request (%s)" % error_code)
+            print("Fail to request (%s)\n" % error_code)
             self._exited = True
             return
         if r.status_code == 206:
@@ -530,12 +530,12 @@ class multiDownload():
               self.num, \
               self.is_partial))
 
-    def _downThread(self, url_i, block_i, retry=1):
+    def _downThread(self, url_i, block_i, retry=2):
         
         def download(url, kwargs, file):
             with requests.get(url, **kwargs, timeout=3, stream=True) as r:
                 r.raise_for_status()
-                if i == 0:
+                if self._stop:
                     with self.lock:
                         print(f"  Download thread of block-{block_i} starts... ({r.headers['content-range']})")
                 # 以下3行用于确保所有线程连接完毕后再开始下载
@@ -574,12 +574,13 @@ class multiDownload():
                         download(self.url[url_i], kwargs, file)
                     except Exception as e:
                         self.error_info = repr(e)
-                    self._connectNum -= 1
                     start = self.block[-block_i] + os.path.getsize(temp_file)
                     if start > end or self._abort:
                         break
-                    sleep(3)
+                    sleep(1)
                     i += 1
+                if self._stop and i > retry:
+                    self._connectNum += 1
         else:
             file = open(temp_file, 'wb')
             kwargs['headers']['Range'] = f'bytes=0-'
@@ -591,10 +592,9 @@ class multiDownload():
                     download(self.url[url_i], kwargs, file)
                 except Exception as e:
                     self.error_info = repr(e)
-                self._connectNum -= 1
                 if os.path.getsize(temp_file) >= self.file_size or self._abort:
                     break
-                sleep(3)
+                sleep(1)
                 i += 1
         file.close()
 

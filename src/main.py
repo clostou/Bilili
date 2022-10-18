@@ -306,7 +306,7 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
     
     slist = r.p_list(sid)
     if failCheck(slist): return
-    print("\n" + "-"*20 + " episode selection " + "-"*20)
+    print("\n" + "-"*19 + " episode selection " + "-"*19)
     i = 1
     for item in slist:
         index = str(i)
