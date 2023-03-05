@@ -19,13 +19,14 @@ from copy import deepcopy
 from time import sleep, perf_counter, strftime, gmtime
 from ctypes import windll
 from tqdm import tqdm
-#from colorama import init; init(autoreset=True)
+from colorama import init
 
 from io import StringIO
 import dm_pb2 as dm
 
 
-__all__ = ["dictDisp", "dump", "load", "proxyServer", "loginQR", "retrieval",
+__all__ = ["print", "outputInit", "dictDisp",
+           "dump", "load", "proxyServer", "loginQR", "retrieval",
            "multiDownload", "biliDownload", "staticDownload",
            "danmuDownload", "ccDownload", "ipLocate",
            "work_path", "base_path", "temp_path"]
@@ -46,6 +47,27 @@ appkey = [
     ('iVGUTjsxvpLeuDCf', 'aHRmhWMLkdeMuILqORnYZocwMBpMEOdt'),    # 取流
     ('1d8b6e7d45233436', '560c52ccd288fed045859ed18bffd973')     # 常规
     ]
+
+
+# 重写保留字print，实现终端的彩色文本输出
+_print = print
+_print_flag = False
+def print(*values, level=0, **kwargs):
+    if _print_flag:
+        sep = kwargs.get('sep', ' ')
+        if level == 1: profix = '\033[1m'
+        elif level == 2: profix = '\033[33m'
+        elif level == 3: profix = '\033[31m'
+        else: profix = ''
+        _print(profix + sep.join(map(str, values)), **kwargs)
+    else:
+        _print(*values, **kwargs)
+
+
+def outputInit():
+    global _print_flag
+    init(autoreset=True)
+    _print_flag = True
 
 
 def dictDisp(dic:dict):
@@ -82,6 +104,7 @@ def load(path):
 
 
 class proxyServer():
+    
     def __init__(self):
         path = r'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
         self._regHandle = winreg.OpenKeyEx(winreg.HKEY_CURRENT_USER, path)
@@ -141,7 +164,7 @@ class _QRWin(threading.Thread):
         text.pack(side='bottom')
         self._win = win
         self._text = text
-        win.protocol('WM_DELETE_WINDOW', lambda: sys.exit(0))
+        win.protocol('WM_DELETE_WINDOW', lambda: self.exit())
         win.deiconify()
         self._exit_hook()
         win.mainloop()
@@ -150,6 +173,7 @@ class _QRWin(threading.Thread):
         self._win.after(500, self._exit_hook)
         if self._quit:
             self._win.destroy()
+            del self._text, self._win
 
     def exit(self):
         if self.is_alive():
@@ -180,14 +204,14 @@ class loginQR():
                 params=appsign({}, *appkey[0]), proxies = self.proxy, \
                 timeout=3)
         except:
-            print("网络错误 (-200)\n")
+            print("网络错误 (-200)\n", level=2)
             return
         if not r.ok:
-            print("网络错误 (%i)\n" % r.status_code)
+            print("网络错误 (%i)\n" % r.status_code, level=2)
             return
         js = r.json()
         if js['code']:
-            print("请求失败 (%i)\n" % js['code'])
+            print("请求失败 (%i)\n" % js['code'], level=2)
             return
         self.qr_url = js['data']['url']
         self.oauth_key = js['data']['oauthKey']
@@ -199,6 +223,7 @@ class loginQR():
         self.qr_img = q.make_image()
     
     def show(self, request_interval=1):
+        global win_thread
         if self.qr_url ==None or self.oauth_key==None:
             return
         win_thread = _QRWin(self.qr_img)
@@ -216,10 +241,10 @@ class loginQR():
                     proxies = self.proxy, \
                     timeout=3)
             except:
-                print("网络错误 (-200)\n")
+                print("网络错误 (-200)\n", level=2)
                 break
             if not r.ok:
-                print("网络错误 (%i)\n" % r.status_code)
+                print("网络错误 (%i)\n" % r.status_code, level=2)
                 break
             js = r.json()
             if not js['status']:
@@ -229,17 +254,17 @@ class loginQR():
                 elif js['data'] == -5:
                     scanned += 1
                 elif js['data'] == -1:
-                    print("密钥错误\n")
+                    print("密钥错误\n", level=2)
                     break
                 elif js['data'] == -2:
                     print("密钥已超时，请重新登录\n")
                     break
                 else:
-                    print("未知错误 (%s)\n" % js['data'])
+                    print("未知错误 (%s)\n" % js['data'], level=2)
                     break
             else:
                 if js['code']:
-                    print("登录失败 (%s)\n" % js['code'])
+                    print("登录失败 (%s)\n" % js['code'], level=2)
                 else:
                     self.cookies.update(r.cookies)
                     self.success = True
@@ -305,6 +330,13 @@ class retrieval():
             return js['code']
         else:
             return js.get('data', js.get('result', {'unkown_tag': None}))
+
+    def c_user(self):
+        data = self._request(\
+            'https://api.bilibili.com/x/vip/web/user/info', {})
+        if isinstance(data, int): return data
+        return self._dictCopy(data, 'mid', \
+                              'vip_type', 'vip_status', 'vip_due_date')
     
     def v_detail(self, vid):
         # raw
@@ -730,7 +762,7 @@ def _xmlEscape(text):
            .replace('"', '&quot;').replace("'", '&apos;')
 
 
-def danmuDownload(cid, path, level=3, flag=0b000, cookies=None, retry=1):
+def danmuDownload(cid, path, level=3, flag=0b000, cookies=None, retry=3):
     header = {
         'Host': 'api.bilibili.com',
         'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',

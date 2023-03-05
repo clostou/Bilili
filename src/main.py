@@ -1,7 +1,6 @@
 import os
 import json
 from bilili import *
-from colorama import init
 from time import strftime, localtime
 from datetime import datetime, timedelta
 from threading import Thread
@@ -54,19 +53,46 @@ def indexInput(raw_str, max_value):
     return index
 
 
+def sessCheck(cookies):
+    r = retrieval(cookies)
+    ret = r.c_user()
+    if isinstance(ret, int):
+        if ret > 0 or ret == -200: 
+            #print("网络错误 (%i)\n" % ret)
+            return 1
+        else: 
+            print("验证过期，请重新登录\n")
+            return 0
+    else:
+        if ret['vip_type'] != 0 and ret['vip_status'] == 1:
+            return 2
+        else:
+            return 1
+
+
 def changeUser(user_name, cookies):
     global tag, f, r
     if f != None:
         f.refresh()
-    tag = name + '(%s)' % user_name
-    r = retrieval(cookies)
-    f = favorite(user_name)
+    state = sessCheck(cookies)
+    if not state:
+        tag = name
+        r = retrieval(None)
+        f = None
+        login(user_name, new=True)
+    else:
+        if state == 2:
+            tag = name + '(*%s)' % user_name
+        else:
+            tag = name + '(%s)' % user_name
+        r = retrieval(cookies)
+        f = favorite(user_name)
 
 
 def failCheck(retrieval_ret):
     if isinstance(retrieval_ret, int):
         if retrieval_ret > 0 or retrieval_ret == -200: 
-            print("网络错误 (%i)\n" % retrieval_ret)
+            print("网络错误 (%i)\n" % retrieval_ret, level=2)
         else: 
             print("服务器拒绝请求 (%i)\n" % retrieval_ret)
         return True
@@ -143,9 +169,10 @@ def search(key_word, search_type=0):
     else:
         print("无相关结果\n")
         return
-    ret = []; tab = " "*12
+    ret = []; tab = " "*6
     for i, res in enumerate(results, 1):
         detail = r.p_detail(res['season_id'])
+        if failCheck(detail): break
         
         ret.append(r._dictCopy(detail, 'media_id', 'season_id', 'title',
                                'total', 'cover'))
@@ -153,7 +180,7 @@ def search(key_word, search_type=0):
             org = "（%s）" % res['org_title']
         else:
             org = ""
-        print("\033[44m%i\033[0m······%s%s" % (i, res['title'], org))
+        print("\033[44m%i\033[0m···%s%s" % (i, res['title'], org))
         for ep in res['eps']:
             print(tab + " ·" + ep)
         print(tab + "|" + "-"*94)
@@ -287,6 +314,20 @@ class favorite():
 
 
 def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
+
+    def vParse(dash):
+        v_type = {}
+        n = len(dash); i = 0
+        while i < n:
+            vq_list = v_type.setdefault(dash[i]['codecid'], [])
+            vq_list.append(dash[i]['id'])
+            i += 1
+        for vc in v_type:
+            v_type[vc].sort(reverse=True)
+        vc_list = list(v_type)
+        vc_list.sort(reverse=True)
+        return vc_list, v_type
+    
     if sid:
         detail = r.p_detail(sid)
         if failCheck(detail): return
@@ -329,15 +370,8 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
     if failCheck(info): return
     vc_list = {13: 'av01(AV1)', 12: 'hev1(H.265)/flv', 7: 'avc1(H.264)'}
     aq_list = {30280: '192K', 30232: '132K', 30216: '64K'}
-    support_vc = []; access_vq = []
-    for v in info['dash']['video']:
-        if v['id'] == info['quality']:
-            support_vc.append(v['codecid'])
-        if v['codecid'] == info['video_codecid']:
-            access_vq.append(v['id'])
+    support_vc, v_type = vParse(info['dash']['video'])
     support_aq = [a['id'] for a in info['dash']['audio']]
-    support_vc.sort(reverse=True)
-    access_vq.sort(reverse=True)
     support_aq.sort(reverse=True)
 
     if only_danmu:
@@ -350,7 +384,8 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
             vc = 12
         else:
             vc = support_vc[-1]
-        vq = min(access_vq[0], 80)
+        access_vq = v_type[vc]
+        vq = min(access_vq[0], 112)
         aq = support_aq[0]
         dm = 8
         print(f"\nAuto configuration:\n  video_codec_id: {vc}\n  video_quality_id: {vq}\n  audio_quality_id: {aq}\n  danmu_block_level: {dm}")
@@ -359,6 +394,7 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
         for i in support_vc:
             print(f"    {i}: {vc_list[i]}")
         vc = int(input("\---video_codec_id: "))
+        access_vq = v_type[vc]
         for i in range(len(info['accept_quality'])):
             if info['accept_quality'][i] not in access_vq:
                 print(f"    {info['accept_quality'][i]}: {info['accept_description'][i]}（会员）")
@@ -401,7 +437,9 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
                             kwargs={'cookies': r.sess})
             dmDown.start()
             ccDown.start()
+        
         ret_v = False; ret_a = False
+        
         not_exist = True
         for dic in dash['video']:
             if dic['id'] == vq  and dic['codecid'] == vc:
@@ -409,26 +447,31 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
                                      join(path, 'video.m4s'), r.sess)
                 not_exist = False
                 break
-        if not_exist:
-            if auto_format:
-                # 自动模式下防止中间某些视频无h.265编码格式
-                for dic in dash['video']:
-                    if dic['id'] == vq and dic['codecid'] == 7:
-                        ret_v = biliDownload(dic, \
-                                            join(path, 'video.m4s'), r.sess)
-                        break
-            else:
-                # 重新选择可用的清晰度
-                for dic in dash['video']:
-                    if dic['id'] == max(access_vq) and dic['codecid'] == vc:
-                        ret_v = biliDownload(dic, \
-                                            join(path, 'video.m4s'), r.sess)
-                        break
+        if not_exist and auto_format:
+            support_vc, v_type = vParse(dash['video'])
+            _vc = vc; _vq = vq
+            if _vc not in support_vc: _vc = support_vc[-1]
+            if _vq not in v_type[_vc]: _vq = v_type[_vc][0]
+            for dic in dash['video']:
+                if dic['id'] == _vq and _dic['codecid'] == 7:
+                    ret_v = biliDownload(dic, \
+                                         join(path, 'video.m4s'), r.sess)
+                    break
+        
+        not_exist = True
         for dic in dash['audio']:
             if dic['id'] == aq:
                 ret_a = biliDownload(dic, \
                                      join(path, 'audio.m4s'), r.sess)
+                not_exist = False
                 break
+        if not_exist and auto_format:
+            _aq = max([a['id'] for a in info['dash']['audio']])
+            for dic in dash['audio']:
+                if dic['id'] == _aq:
+                    ret_a = biliDownload(dic, \
+                                            join(path, 'audio.m4s'), r.sess)
+                    break
         #staticDownload('https://comment.bilibili.com/%s.xml' % ep['cid'], \
         #               join(path, 'danmaku.xml'))
         if ret_v and ret_a: i += 1
@@ -463,7 +506,8 @@ class utils():
 def mainLoop():
     prompt = ' > '
     while True:
-        raw = input(tag + prompt)
+        print(tag + prompt, end='', level=1)
+        raw = input()
         cut = raw.split(' ')
         if cut[0] == 'search':
             try:
@@ -569,5 +613,5 @@ if __name__ == '__main__':
     f = None
     u = utils()
     print("="*96 + "\n\n" + " "*32 + "Bilili（哔哩哩）B站视频下载工具\n\n" + "="*96)
-    init(autoreset=True)
+    outputInit()
     mainLoop()
