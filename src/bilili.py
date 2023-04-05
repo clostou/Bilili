@@ -13,13 +13,14 @@ import json
 import pickle
 import base64
 from hashlib import md5
-import winreg
 
 from copy import deepcopy
 from time import sleep, perf_counter, strftime, gmtime
 from ctypes import windll
 from tqdm import tqdm
 from colorama import init
+import winreg
+from functools import wraps
 
 from io import StringIO
 import dm_pb2 as dm
@@ -37,7 +38,7 @@ if getattr(sys, 'frozen', False):
     base_path = sys._MEIPASS
 else:
     base_path = os.path.dirname(os.path.abspath(__file__))
-temp_path = os.path.join(os.getenv('TEMP'), 'Bilili')
+temp_path = os.path.join(os.getenv('APPDATA'), 'Bilili')
 if not os.path.exists(temp_path):
     os.mkdir(temp_path)
 
@@ -55,9 +56,9 @@ _print_flag = False
 def print(*values, level=0, **kwargs):
     if _print_flag:
         sep = kwargs.get('sep', ' ')
-        if level == 1: profix = '\033[1m'
-        elif level == 2: profix = '\033[33m'
-        elif level == 3: profix = '\033[31m'
+        if level == 1: profix = '\033[1m'    # 高亮
+        elif level == 2: profix = '\033[33m'    # 黄色
+        elif level == 3: profix = '\033[31m'    # 红色
         else: profix = ''
         _print(profix + sep.join(map(str, values)), **kwargs)
     else:
@@ -277,6 +278,44 @@ class loginQR():
         win_thread.exit()
 
 
+class Reconnect():
+    '''用于请求函数的装饰器，实现断线重连及异常捕捉'''
+    
+    def __init__(self, retry=2, interval=1, print_err=True):
+        self.retry = retry
+        self.interval = interval
+        self.print_err = print_err
+    
+    def __call__(self, func):
+        
+        @wraps(func)
+        def wrappedFunction(*args, **kwargs):
+            i = 0
+            while i <= self.retry:
+                ret = 500; err = ''
+                try:
+                    ret = func(*args, **kwargs)
+                except Exception as e:
+                    err = type(e).__name__
+                else:
+                    if isinstance(ret, int) and ret != 0:
+                        err = str(ret)
+                        if ret < 0:
+                            break
+                    else:
+                        return ret
+                sleep(self.interval)
+                i += 1
+            if self.print_err:
+                if ret > 0:
+                    print(f"网络错误 ({func.__name__}: {err})\n", level=3)
+                else:
+                    print(f"服务器拒绝请求 ({func.__name__}: {err})\n", level=2)
+            return ret
+        
+        return wrappedFunction
+
+
 class retrieval():
 
     def __init__(self, sessdata):
@@ -312,19 +351,17 @@ class retrieval():
             params = {'bvid':vid}
         return params
 
+    @Reconnect()
     def _request(self, url, params, sign=2, timeout=3):
-        try:
-            r = requests.get(\
-                url, \
-                headers=self.header, \
-                params=appsign(params, *appkey[sign]), \
-                cookies=self.sess, \
-                proxies=Proxy(), \
-                timeout=3)
-        except:
-            return -200
+        r = requests.get(\
+            url, \
+            headers=self.header, \
+            params=appsign(params, *appkey[sign]), \
+            cookies=self.sess, \
+            proxies=Proxy(), \
+            timeout=3)
         if not r.ok:
-            return r.status_code 
+            return r.status_code
         js = r.json()
         if js['code']:
             return js['code']
@@ -438,15 +475,17 @@ class retrieval():
                 i += 1
         return eps
 
-    def geturl(self, vid, cid, **kwargs):
+    def geturl(self, vid, cid, is_pgc=False, **kwargs):
         params = self._idParse(vid, flag=1)
         params['cid'] = cid
-        params['qn'] = kwargs.get('qn', 0)
+        params['qn'] = kwargs.get('qn', 80)
         params['fnval'] = kwargs.get('fnval', 16)
         params['fourk'] = kwargs.get('fourk', 0)
-        data = self._request(\
-            'https://api.bilibili.com/x/player/playurl', \
-            params, sign=1)
+        if is_pcg:
+            url = 'https://api.bilibili.com/pgc/player/web/playurl'
+        else:
+            url = 'https://api.bilibili.com/x/player/playurl'
+        data = self._request(url, params, sign=1)
         return data
 
 
@@ -475,8 +514,8 @@ class _tqdmLike():
 
 class multiDownload():
 
-    def __init__(self, url, dst, threading_num=-1, process_bar=False,
-                 **request_kwargs):
+    def __init__(self, url, dst, threading_num=-1, retry=2,
+                 process_bar=False, **request_kwargs):
         self.lock = threading.Lock()
         self.pool = []
         self.num = threading_num
@@ -491,6 +530,7 @@ class multiDownload():
             self.url = url
         else:
             self.url = [url]
+        self.retry = retry
         self.kwargs = request_kwargs
         self.chunk_size = 524288    # 512KB
 
@@ -508,16 +548,23 @@ class multiDownload():
         header = self.kwargs.get('headers', {})
         header['Range'] = 'bytes=0-'
         self.kwargs['headers'] = header
-        try:
-            error_code = -200
-            r = requests.get(self.url[0], **self.kwargs, timeout=3, stream=True)
-            error_code = r.status_code
-            r.raise_for_status()
-        except Exception as e:
-            self.error_info = repr(e)
-            print("Fail to request (%s)\n" % error_code)
-            self._exited = True
-            return
+        i = 0
+        while True:
+            try:
+                error_code = 500
+                r = requests.get(self.url[0], **self.kwargs, timeout=3, stream=True)
+                error_code = r.status_code
+                r.raise_for_status()
+            except Exception as e:
+                if i >= self.retry:
+                    self.error_info = repr(e)
+                    print("Fail to connect (%s)\n" % error_code)
+                    self._exited = True
+                    return
+                else:
+                    i += 1
+            else:
+                break
         if r.status_code == 206:
             self.is_partial = True
         else:
@@ -651,7 +698,7 @@ class multiDownload():
         while i <= self.num:
             thread = threading.Thread(target=self._downThread, \
                                       name='downThread-%s' % i, \
-                                      args=(j, i, 3))
+                                      args=(j, i, self.retry))
             self.pool.append(thread)
             i += 1; j += 1
             if j >= len(self.url): j = 0
@@ -718,15 +765,18 @@ class multiDownload():
             self.success = False
 
 
-def biliDownload(url_dic, path, sessdata, process_bar=True):
+def biliDownload(url_dic, path, sessdata, retry=3, process_bar=True):
     header = {
         'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
         'Referer': 'https://www.bilibili.com/'
         }
-    url_list= [url_dic['base_url']] + url_dic['backup_url']
+    if url_dic['backup_url']:
+        url_list= [url_dic['base_url']] + url_dic['backup_url']
+    else:
+        url_list= [url_dic['base_url']]
     i = 0; end_i = len(url_list) - 1
     while True:
-        d = multiDownload(url_list[i], path, process_bar=process_bar, \
+        d = multiDownload(url_list[i], path, retry=retry, process_bar=process_bar, \
                           headers=header, params=appsign({}, *appkey[1]), \
                           proxies=Proxy(), cookies=sessdata)
         d.start()
@@ -737,6 +787,7 @@ def biliDownload(url_dic, path, sessdata, process_bar=True):
     return d.success
 
 
+@Reconnect()
 def staticDownload(url, path=None, params={}):
     header = {
         'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
@@ -748,7 +799,8 @@ def staticDownload(url, path=None, params={}):
         params=params, \
         proxies=Proxy(), \
         timeout=3)
-    r.raise_for_status()
+    if not r.ok:
+        return r.status_code
     if path:
         with open(path, 'wb') as f:
             f.write(r.content)
@@ -762,46 +814,47 @@ def _xmlEscape(text):
            .replace('"', '&quot;').replace("'", '&apos;')
 
 
-def danmuDownload(cid, path, level=3, flag=0b000, cookies=None, retry=3):
+def danmuDownload(cid, path, level=3, flag=0b000, cookies=None):
     header = {
         'Host': 'api.bilibili.com',
         'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
         'Referer': 'https://www.bilibili.com/'
     }
-    params = {'type': 1, 'oid': cid, 'segment_index': 1}
     url = 'https://api.bilibili.com/x/v2/dm/web/seg.so'
-    proxy = Proxy()
+    
+    @Reconnect(print_err=False)
+    def danmuRequest(params):
+        r = requests.get(\
+            url, \
+            params=params, \
+            headers=header, \
+            cookies=cookies, \
+            proxies=Proxy(), \
+            timeout=3)
+        if not r.ok:
+            return r.status_code
+        return r.content
+    
+    params = {'type': 1, 'oid': cid, 'segment_index': 1}
     if flag == 0:
         if level < 0 or level > 10:
             print("Invalid level value (0-10)")
-            return
+            return 0
         filt = lambda d: True if d.weight>level else False
     else:
         # bit0:保护 bit1:直播 bit2:高赞
         if flag < 0:
             print("Invalid flag value (>=0)")
-            return
+            return 0
         filt = lambda d: True if d.attr&flag>0 else False
     proto = dm.DmSegMobileReply()
     buf = StringIO()
     count_all = 0; count = 0
     while True:
-        try:
-            r = requests.get(\
-                url, \
-                params=params, \
-                headers=header, \
-                cookies=cookies, \
-                proxies=proxy, \
-                timeout=3)
-            r.raise_for_status()
-        except:
-            if retry:
-                retry -= 1
-                continue
-            else:
-                return ()
-        proto.ParseFromString(r.content)
+        ret = danmuRequest(params)
+        if isinstance(ret, int):
+            return ret
+        proto.ParseFromString(ret)
         seg_n = len(proto.elems)
         if seg_n > 0:
             params['segment_index'] += 1
@@ -866,6 +919,7 @@ def _ccList2srt(cclist, **font_args):
     return buf
 
 
+@Reconnect(print_err=False)
 def ccDownload(aid, cid, path, cookies=None):
     header = {
         'Host': 'api.bilibili.com',
@@ -874,30 +928,24 @@ def ccDownload(aid, cid, path, cookies=None):
     }
     params = {'aid': aid, 'cid': cid}
     url = 'https://api.bilibili.com/x/web-interface/view'
-    try:
-        r = requests.get(url, \
-                         params=params, \
-                         headers = header, \
-                         cookies=cookies, \
-                         proxies=Proxy(), \
-                         timeout=3)
-    except:
-        return -200
+    r = requests.get(url, \
+                     params=params, \
+                     headers = header, \
+                     cookies=cookies, \
+                     proxies=Proxy(), \
+                     timeout=3)
     if not r.ok:
         return r.status_code
     js = r.json()
     if js['code']:
         return js['code']
     subtitles = js['data']['subtitle']['list']
-    if len(subtitles) == 0:
-        return 0
     for item in subtitles:
         subtitle_data = json.loads(staticDownload(item['subtitle_url']))
         srt_data = _ccList2srt(subtitle_data['body'])
         _path = os.path.join(path, '%s.srt' % item['lan'])
         with open(_path, 'w', encoding='utf-8') as f:
             f.write(srt_data.getvalue())
-    return 0
 
 
 def ipLocate():
@@ -938,6 +986,7 @@ if __name__ == '__main__':
     #dictDisp(r.p_review(28222736))
     #dictDisp(r.geturl(76392635, 130671984))
     #dictDisp(r.geturl(379104230, 107309283))    # 老视频不支持编码12
+    #dictDisp(r.geturl(11668811, 19278257, is_pgc=True))    # 少数(老)番剧取流需要专用api
     
     #dictDisp(r.p_detail(28595))
     #dictDisp(r.p_review(28222693))

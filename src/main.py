@@ -1,8 +1,10 @@
 import os
 import json
 from bilili import *
+from merge import *
 from time import strftime, localtime
 from datetime import datetime, timedelta
+from traceback import format_exc
 from threading import Thread
 
 
@@ -19,7 +21,18 @@ def cutByLen(string, size, sep='\n'):
     return sep.join(cuts)
 
 
-def indexInput(raw_str, max_value):
+def indexInput(raw_str, vaild_value):
+    try:
+        index = int(raw_str)
+        if index not in vaild_value:
+            raise ValueError
+    except:
+        index = -1
+        print("输入的数值有误，请检查后重试")
+    return index
+
+
+def indexesInput(raw_str, max_value):
     raw = raw_str.split(',')
     index = []
     for item in raw:
@@ -53,11 +66,18 @@ def indexInput(raw_str, max_value):
     return index
 
 
+def failCheck(retrieval_ret):
+    if isinstance(retrieval_ret, int):
+        return True
+    else:
+        return False
+
+
 def sessCheck(cookies):
     r = retrieval(cookies)
     ret = r.c_user()
     if isinstance(ret, int):
-        if ret > 0 or ret == -200: 
+        if ret > 0: 
             #print("网络错误 (%i)\n" % ret)
             return 1
         else: 
@@ -87,17 +107,6 @@ def changeUser(user_name, cookies):
             tag = name + '(%s)' % user_name
         r = retrieval(cookies)
         f = favorite(user_name)
-
-
-def failCheck(retrieval_ret):
-    if isinstance(retrieval_ret, int):
-        if retrieval_ret > 0 or retrieval_ret == -200: 
-            print("网络错误 (%i)\n" % retrieval_ret, level=2)
-        else: 
-            print("服务器拒绝请求 (%i)\n" % retrieval_ret)
-        return True
-    else:
-        return False
 
 
 def login(user_name, new=False):
@@ -148,6 +157,7 @@ class select():
 
 
 def search(key_word, search_type=0):
+    
     def form(string, src_sep, dst_sep, cut_len, cut_sep):
         cuts = string.split(src_sep)
         for i in range(len(cuts)):
@@ -263,7 +273,7 @@ class favorite():
         print(" '%s' 已添加至收藏夹" % dic['title'])
 
     def delete(self, raw_str):
-        ind = indexInput(raw_str, len(self.list))
+        ind = indexesInput(raw_str, len(self.list))
         i = 0; n = len(ind)
         while i < n:
             self.list[ind[i]] = None
@@ -313,7 +323,7 @@ class favorite():
         print("#活动的列表：%s的收藏夹\n" % self.user)
 
 
-def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
+def download(sid, select_id, output_path, auto_format=False, only_danmu=False):
 
     def vParse(dash):
         v_type = {}
@@ -328,6 +338,23 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
         vc_list.sort(reverse=True)
         return vc_list, v_type
     
+    def aParse(dash):
+        aq_list = []
+        n = len(dash); i = 0
+        while i < n:
+            aq_list.append(dash[i]['id'])
+            i += 1
+        aq_list.sort(reverse=True)
+        return aq_list
+    
+    def next(value, sorted_list):
+        i = 0; n = len(sorted_list)
+        while i < n:
+            if sorted_list[i] < value:
+                return sorted_list[i]
+            i += 1
+        return sorted_list[-1]
+    
     if sid:
         detail = r.p_detail(sid)
         if failCheck(detail): return
@@ -339,46 +366,50 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
         if not info: return
         sid = info['season_id']
     join = os.path.join
-    dir_path = join(dir_path, 's_%s' % sid)
+    dir_path = join(output_path, 's_%s' % sid)
     os.makedirs(dir_path, exist_ok=True)
     with open(join(dir_path, 'info.json'), 'w', encoding='utf-8') as fw:
         fw.write(json.dumps(info, ensure_ascii=False))
-    staticDownload(info['cover'], join(dir_path, 'cover.jpg'))
+    staticDownload(info['cover'], join(dir_path, 'cover.%s' % info['cover'].split('.')[-1]))
     
     slist = r.p_list(sid)
     if failCheck(slist): return
-    print("\n" + "-"*19 + " episode selection " + "-"*19)
-    i = 1
-    for item in slist:
-        index = str(i)
-        string = " "*(5-len(index)) + index + ": " + item['title']
-        if item['badge']:
-            string += "（%s）" % item['badge']
-        print(string)
-        i += 1
-    raw = input("\---episodes(e.g.1-%i,%i): " % (i-3, i-1))
-    index = indexInput(raw, i - 1)
-    if len(index) == 0:
-        return
-    eps = []
-    i = 0; n = len(index)
-    while i < n:
-        eps.append(slist[index[i]])
-        i += 1
+    if len(slist) > 1:
+        print("\n" + "-"*19 + " episode selection " + "-"*19)
+        i = 1
+        for item in slist:
+            ind = str(i)
+            string = " "*(5-len(ind)) + ind + ": " + item['title']
+            if item['badge']:
+                string += "（%s）" % item['badge']
+            print(string)
+            i += 1
+        raw = input("\---episodes(e.g.1-%i,%i): " % (i-2, i-1))
+        index = indexesInput(raw, i - 1)
+        if len(index) == 0:
+            return
+        eps = []
+        i = 0; n = len(index)
+        while i < n:
+            eps.append(slist[index[i]])
+            i += 1
+    else:
+        n = len(slist)
+        eps = slist
 
-    info = r.geturl(eps[0]['aid'], eps[0]['cid'], fnval=2256, fourk=1)
+    info = r.geturl(eps[0]['aid'], eps[0]['cid'], is_pcg=True, fnval=2192, fourk=1)    # 最高4K分辨率
     if failCheck(info): return
     vc_list = {13: 'av01(AV1)', 12: 'hev1(H.265)/flv', 7: 'avc1(H.264)'}
     aq_list = {30280: '192K', 30232: '132K', 30216: '64K'}
     support_vc, v_type = vParse(info['dash']['video'])
-    support_aq = [a['id'] for a in info['dash']['audio']]
-    support_aq.sort(reverse=True)
+    support_aq = aParse(info['dash']['audio'])
 
     if only_danmu:
         print("\n" + "-"*20 + " download config " + "-"*20)
         print(f"\n    0: 保留全部弹幕\n    ...\n    8: 默认屏蔽等级(推荐)\n    ...\n    10: 最高屏蔽等级")
-        dm = int(input("\---danmu_block_level(0-10): "))
-        if dm < 0 or dm >10: dm = 8
+        raw = input("\---danmu_block_level(0-10): ")
+        dm = indexInput(raw, range(11))
+        if dm < 0: return
     elif auto_format:
         if 12 in support_vc:
             vc = 12
@@ -393,39 +424,46 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
         print("\n" + "-"*20 + " download config " + "-"*20)
         for i in support_vc:
             print(f"    {i}: {vc_list[i]}")
-        vc = int(input("\---video_codec_id: "))
+        raw = input("\---video_codec_id: ")
+        vc = indexInput(raw, support_vc)
+        if vc < 0: return
         access_vq = v_type[vc]
         for i in range(len(info['accept_quality'])):
             if info['accept_quality'][i] not in access_vq:
                 print(f"    {info['accept_quality'][i]}: {info['accept_description'][i]}（会员）")
             else:
                 print(f"    {info['accept_quality'][i]}: {info['accept_description'][i]}")
-        vq = int(input("\---video_quality_id: "))
+        raw = input("\---video_quality_id: ")
+        vq = indexInput(raw, access_vq)
+        if vq < 0: return
         for i in support_aq:
             print(f"    {i}: {aq_list[i]}")
-        aq = int(input("\---audio_quality_id: "))
+        raw = input("\---audio_quality_id: ")
+        aq = indexInput(raw, support_aq)
+        if aq < 0: return
         print(f"    0: 保留全部弹幕\n    ...\n    8: 默认屏蔽等级(推荐)\n    ...\n    10: 最高屏蔽等级")
-        dm = int(input("\---danmu_block_level(0-10): "))
-        if dm < 0 or dm >10: dm = 8
+        raw = input("\---danmu_block_level(0-10): ")
+        dm = indexInput(raw, range(11))
+        if dm < 0: return
 
     print("\nStarting multi-thread download...")
-    i = 0.
+    i = 0
     for ep in eps:
         path = join(dir_path, ep['index'])
         if not os.path.exists(path):
             os.mkdir(path)
         with open(join(path, 'info.json'), 'w', encoding='utf-8') as fw:
             fw.write(json.dumps(ep, ensure_ascii=False))
-        info = r.geturl(ep['aid'], ep['cid'], fnval=2256, fourk=1)
-        if failCheck(info):
-            continue
-        else: dash = info['dash']
+        staticDownload(ep['cover'], join(path, 'cover.%s' % ep['cover'].split('.')[-1]))
+        
         if only_danmu:
             # 仅下载弹幕
             ret = danmuDownload(ep['cid'], join(path, 'danmaku.xml'), \
                                 level=dm, cookies=r.sess)
-            if ret:
-                print(f"{int(i)+1}: 保留{ret[0]} / 总共{ret[1]}\n")
+            if failCheck(ret):
+                print("%d: 更新失败" % i + 1)
+            else:
+                print(f"{i+1}: 保留{ret[0]} / 总共{ret[1]}\n")
                 i += 1
             continue
         else:
@@ -438,6 +476,9 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
             dmDown.start()
             ccDown.start()
         
+        info = r.geturl(ep['aid'], ep['cid'], is_pcg=True, fnval=2192, fourk=1)
+        if failCheck(info): continue
+        dash = info['dash']
         ret_v = False; ret_a = False
         
         not_exist = True
@@ -447,13 +488,13 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
                                      join(path, 'video.m4s'), r.sess)
                 not_exist = False
                 break
-        if not_exist and auto_format:
+        if not_exist:
             support_vc, v_type = vParse(dash['video'])
             _vc = vc; _vq = vq
-            if _vc not in support_vc: _vc = support_vc[-1]
-            if _vq not in v_type[_vc]: _vq = v_type[_vc][0]
+            if _vc not in support_vc: _vc = next(_vc, support_vc)
+            if _vq not in v_type[_vc]: _vq = next(_vq, v_type[_vc])
             for dic in dash['video']:
-                if dic['id'] == _vq and _dic['codecid'] == 7:
+                if dic['id'] == _vq and _dic['codecid'] == _vc:
                     ret_v = biliDownload(dic, \
                                          join(path, 'video.m4s'), r.sess)
                     break
@@ -465,8 +506,9 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
                                      join(path, 'audio.m4s'), r.sess)
                 not_exist = False
                 break
-        if not_exist and auto_format:
-            _aq = max([a['id'] for a in info['dash']['audio']])
+        if not_exist:
+            support_aq = aParse(dash['audio'])
+            _aq = next(aq, support_aq)
             for dic in dash['audio']:
                 if dic['id'] == _aq:
                     ret_a = biliDownload(dic, \
@@ -475,8 +517,27 @@ def download(sid, select_id, dir_path, auto_format=False, only_danmu=False):
         #staticDownload('https://comment.bilibili.com/%s.xml' % ep['cid'], \
         #               join(path, 'danmaku.xml'))
         if ret_v and ret_a: i += 1
+
+    m.add(dir_path)
+    print(" %i 个文件下载完成（总共：%i，失败：%i）\n" % (i, n, n - i))
+
+
+class merge():
     
-    print(" %i 个视频下载完成（总共：%i，失败：%i）\n" % (i, n, n - i))
+    def __init__(self):
+        self.merge_list = []
+    
+    def add(self, dir_path):
+        if dir_path not in self.merge_list:
+            self.merge_list.append(dir_path)
+    
+    def convert(self, target, output_path, keep_subtitle=False):
+        if target:
+            Convert([target], output_path, embed_cc=not keep_subtitle)
+        elif self.merge_list:
+            Convert(self.merge_list, output_path, embed_cc=not keep_subtitle)
+        else:
+            print("没有需要合并的文件")
 
 
 class utils():
@@ -487,12 +548,12 @@ class utils():
     def doc_about(self):
         with open(os.path.join(base_path, 'helpDoc.txt'), \
                   'r', encoding='utf-8') as f:
-            print(f.read(103))
+            print(f.read(121))
 
     def doc_help(self):
         with open(os.path.join(base_path, 'helpDoc.txt'), \
                   'r', encoding='utf-8') as f:
-            f.seek(243)
+            f.seek(260)
             print(f.read())
 
     def clear_temp(self):
@@ -565,15 +626,38 @@ def mainLoop():
                         i += 1
                     elif cut[i] == '-auto':
                         auto = True
-                    elif cut[i] == '-only_danmu':
+                    elif cut[i] == '-update_danmu':
                         only = True
                     else:
                         raise Exception
                     i += 1
             except:
-                print("用法：download {list_id | 's'+season_id} [-path {save_path}] [-auto] [-only_danmu]")
+                print("用法：download {list_id | 's'+season_id} [-path {save_path}] [-auto] [-update_danmu]")
                 continue
             download(sid, no, path, auto, only)
+        elif cut[0] == 'merge':
+            try:
+                target = None
+                path = work_path
+                keep_subtitle = False
+                if len(cut) > 1:
+                    i = 1; n = len(cut)
+                    if os.path.exists(cut[1]):
+                        target = cut[1]
+                        i += 1
+                    while i < n:
+                        if cut[i] == '-path':
+                            path = cut[i + 1]
+                            i += 1
+                        elif cut[i] == '-keep_subtitle':
+                            keep_subtitle = True
+                        else:
+                            raise Exception
+                        i += 1
+            except:
+                print("用法：merge [{target}] [-path {save_path}] [-keep_subtitle]")
+                continue
+            m.convert(target, path, keep_subtitle)
         elif cut[0] == 'login':
             try:
                 if cut[1] == 'new':
@@ -610,8 +694,13 @@ if __name__ == '__main__':
     tag = name
     r = retrieval(None)
     s = select()
+    m = merge()
     f = None
     u = utils()
     print("="*96 + "\n\n" + " "*32 + "Bilili（哔哩哩）B站视频下载工具\n\n" + "="*96)
     outputInit()
-    mainLoop()
+    try:
+        mainLoop()
+    except:
+        print(format_exc(), level=3)
+        input("\n请按任意键退出...")
