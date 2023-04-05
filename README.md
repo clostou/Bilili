@@ -1,5 +1,5 @@
 # BililiÃüÁîÐÐ¹¤¾ß
-![](https://img.shields.io/badge/FileVer.-1.1.6-orange) ![](https://img.shields.io/badge/Python-3.x-blue) ![](https://img.shields.io/badge/LICENSE-GPLv3-green)
+![](https://img.shields.io/badge/FileVer.-1.2.1-orange) ![](https://img.shields.io/badge/Python-3.x-blue) ![](https://img.shields.io/badge/LICENSE-GPLv3-green)
 ## ¼ò½é
 Bilili£¨ßÙÁ¨Á¨£©ÊÇÒ»¸ö»ùÓÚPython3ºÍßÙÁ¨ßÙÁ¨APIµÄÃüÁîÐÐ¹¤¾ß¡£¸ÃÏîÄ¿ÊµÏÖÁËBÕ¾·¬¾çºÍÓ°ÊÓµÈPGCÀàÊÓÆµµÄ¶àÏß³Ì±¾µØÏÂÔØ£¬»¹Ö§³ÖÊÓÆµËÑË÷¡¢ÕËºÅ¹ÜÀíºÍ¼òµ¥µÄÊÕ²Ø¼Ð¹¦ÄÜ¡£
 
@@ -19,11 +19,11 @@ Bilili£¨ßÙÁ¨Á¨£©ÊÇÒ»¸ö»ùÓÚPython3ºÍßÙÁ¨ßÙÁ¨APIµÄÃüÁîÐÐ¹¤¾ß¡£¸ÃÏîÄ¿ÊµÏÖÁËBÕ¾·¬¾çº
 
     ×¢£ºÄ³Ð©ÊÓÆµµÄ·ÃÎÊ¡¢ÏÂÔØ(»ò¸ß»­ÖÊÏÂÔØ)¿ÉÄÜÐèÒªBÕ¾ÕËºÅ»ò´ó»áÔ±ÕËºÅµÄµÇÂ¼
 
-**2. search bangumi | ft \{key_word}**
+**2. search**
 
-    ÔÚBÕ¾·¬¾ç»òÓ°ÊÓ·ÖÇø½øÐÐ¹Ø¼ü´Ê(key_word)ËÑË÷£¬²¢½«ËÑË÷½á¹ûÉèÖÃÎª»î¶¯ÁÐ±í  
-    bangumi£º·¬¾ç·ÖÇø  
-    »òft£ºÓ°ÊÓ·ÖÇø  
+    ÔÚBÕ¾·¬¾ç»òÓ°ÊÓ·ÖÇø½øÐÐËÑË÷£¬²¢½«½á¹ûÉèÖÃÎª»î¶¯ÁÐ±í
+    + bangumi {key_word}£ºÔÚ·¬¾ç·ÖÇøËÑË÷¹Ø¼ü´Êkey_word
+    + ft {key_word}£ºÔÚÓ°ÊÓ·ÖÇøËÑË÷¹Ø¼ü´Êkey_word
 
 **3. favorite**
 
@@ -45,9 +45,9 @@ Bilili£¨ßÙÁ¨Á¨£©ÊÇÒ»¸ö»ùÓÚPython3ºÍßÙÁ¨ßÙÁ¨APIµÄÃüÁîÐÐ¹¤¾ß¡£¸ÃÏîÄ¿ÊµÏÖÁËBÕ¾·¬¾çº
                 favorite delete 3,5,9-
     + list£ºÁÐ³öÊÕ²Ø¼ÐÖÐµÄÈ«²¿ÊÓÆµ£¬²¢½«µ±Ç°ÊÕ²Ø¼ÐÉèÖÃÎª»î¶¯ÁÐ±í
 
-**4. download {list_id | 's'+season_id} [-path {save_path}] [-auto] [-only_danmu]**
+**4. download {list_id | 's'+season_id} [-path \{save_path}] [-auto] [-update_danmu]**
 
-    ÏÂÔØ»î¶¯ÁÐ±íÖÐ±àºÅÎªlist_idµÄÊÓÆµ
+    ÏÂÔØÖ¸¶¨¸ñÊ½µÄÊÓÆµ£¬²¢±£´æÎªdashÎÄ¼þ
     µÚÒ»²ÎÊý list_id | 's'+season_id£º
         list_id£ºÏÂÔØ»î¶¯ÁÐ±íÖÐ±àºÅÎªlist_idµÄÊÓÆµ
             Ê¾Àý£º
@@ -62,41 +62,57 @@ Bilili£¨ßÙÁ¨Á¨£©ÊÇÒ»¸ö»ùÓÚPython3ºÍßÙÁ¨ßÙÁ¨APIµÄÃüÁîÐÐ¹¤¾ß¡£¸ÃÏîÄ¿ÊµÏÖÁËBÕ¾·¬¾çº
                 ÏÂÔØssidºÅÎª28625µÄ·¬¾ç£º
                     download s28625
     ¿ÉÑ¡²ÎÊý -path {save_path}£º
-        ÉèÖÃÎÄ¼þÏÂÔØÂ·¾¶Îªsave_path
+        ÉèÖÃÎÄ¼þ±£´æÂ·¾¶Îªsave_path
     ¿ÉÑ¡²ÎÊý -auto£º
         ×Ô¶¯Ñ¡ÔñÒôÊÓÆµ¸ñÊ½ºÍÇåÎú¶È£¨Ä¬ÈÏh.265/1080p/192k£©
-    ¿ÉÑ¡²ÎÊý -only_danmu£º
+    ¿ÉÑ¡²ÎÊý -update_danmu£º
         ½öÏÂÔØ»ò¸üÐÂµ¯Ä»
 
-    ×¢£º²¿·ÖÀÏÊÓÆµ¿ÉÄÜ²»Ö§³Öh.265±àÂë¡£ÈôÎ´ÏÂÔØvideo.m4sÊÓÆµÎÄ¼þ£¬Çë½«video_codec_idµÄÖµÉèÎª7
+**5. merge [\{target}] [-path \{save_path}] [-keep_subtitle]**
 
-**5. clear**
+    ½«ÏÈÇ°ÒÑÏÂÔØµÄÊÓÆµºÏ²¢ÎªMP4¸ñÊ½
+    ¿ÉÑ¡²ÎÊý {target}£º
+        ½öºÏ²¢targetÖ¸¶¨µÄÄ¿Â¼ÏÂµÄÊÓÆµ
+            Ê¾Àý£º
+                1.ÉÏÒ»ÌõÃüÁîÎª¡°download 1¡±£¬ÇÒÊÓÆµÏÂÔØ³É¹¦
+                  ×ªÎªMP4¸ñÊ½£º
+                      merge
+                2.Ö®Ç°ÏÂÔØÁË·¬¾çµ«Ã»ÓÐºÏ²¢£¬±£´æÔÚEÅÌs_6333ÎÄ¼þ¼ÐÖÐ
+                  µÚ¶þ´Î´ò¿ªÈí¼þ£¬¿ÉÊäÈëÏÂÁÐÖ¸ÁîµÃµ½MP4¸ñÊ½µÄÎÄ¼þ£º
+                      merge E:\s_6333
+    ¿ÉÑ¡²ÎÊý -path {save_path}£º
+        ÉèÖÃÎÄ¼þ±£´æÂ·¾¶Îªsave_path
+    ¿ÉÑ¡²ÎÊý -keep_subtitle£º
+        ÈôÊÓÆµÓÐcc×ÖÄ»£¬Ôò½«×ÖÄ»ÒÔsrt¸ñÊ½±£´æÓÚµ¥¶ÀµÄÎÄ¼þ¼ÐÖÐ£¨Ä¬ÈÏ»áÖ±½Ó°Ñ×ÖÄ»·â×°ÔÚMP4Àï£©
+
+**6. clear**
 
     Çå³ý±¾µØËùÓÐ»º´æÊý¾Ý(µÇÂ¼¼ÇÂ¼ºÍÊÕ²Ø¼Ð)
 
-**6. debug \{python_code}**
+**7. debug \{python_code}**
 
     Ïò³ÌÐò·¢ËÍÒ»Ìõ¿ÉÖ´ÐÐpython´úÂë£¬½öÓÃÓÚµ÷ÊÔ
 
-**7. help**
+**8. help**
 
     ²é¿´ÃüÁî°ïÖú
 
-**8. about**
+**9. about**
 
     ÏÔÊ¾Èí¼þÏà¹ØÐÅÏ¢
 
-**9. version**
+**10. version**
 
     ÏÔÊ¾Èí¼þ°æ±¾
 
-**10. exit**
+**11. exit**
 
     ÍË³ö³ÌÐò
 
 ## Ïà¹Ø
-³ÌÐòÏÂÔØµÄÎÄ¼þÓëßÙÁ¨ßÙÁ¨°²×¿ºÍWIN10¿Í»§¶ËÀàËÆ£¬Îªdash¸ñÊ½£¨ÒôÊÓÆµÊÇ·Ö¿ªµÄÁ½¸öÎÄ¼þ£©£¬ºÏ²¢Çë²Î¿¼ÎÒµÄÁíÒ»¸öÏîÄ¿m4sMerge[^1]¡£
+³ÌÐòÏÂÔØµÄÎÄ¼þÓëßÙÁ¨ßÙÁ¨AndroidºÍWindows 10¿Í»§¶ËÀàËÆ£¬Îªdash¸ñÊ½£¨ÒôÊÓÆµÊÇ·Ö¿ªµÄÁ½¸öÎÄ¼þ£©¡£Èí¼þ´Ó`v1.2`¿ªÊ¼Ö§³ÖÖ±½Ó×ªÎªmp4¸ñÊ½£¬¶ÔÓÚÖ®Ç°µÄ°æ±¾£¬ºÏ²¢¿ÉÒÔ²Î¿¼ÎÒµÄÁíÒ»¸öÏîÄ¿m4sMerge[^1]¡£
 >*Õâ¸öÏîÄ¿¿ªÊ¼µÄ½ÏÔç£¬¾­¹ý¶à´Î¡°Ê¹ÓÃ-·´À¡-¸Ä½ø¡±£¬ÒÑ¾­±È½Ï³ÉÊì¡£²»¹ýÎÒ»¹Ã»°ÑËü°áµ½GitHubÉÏ£¬~~ºóÃæÓÐÊ±¼ä¾Í°Ñ°áÉÏÀ´~~¡£*
+
 
 * ÖªºõÁ´½Ó£¨ÄÚº¬ºÏ²¢Èí¼þÏÂÔØÁ´½Ó£©£º[ÔõÑù°ÑBÕ¾ÏÂÔØµ½µçÄÔµÄÊÓÆµ¸úÒôÆµºÏ²¢ÔÚÒ»Æð? - Öªºõ](https://www.zhihu.com/question/354969536/answer/1270358138)
 [^1]: Ö±½ÓÊ¹ÓÃÇ°ÐèÒª°ÑÄ£Ê½ÎÄ¼þ Bilili_amdtool.pat ·Åµ½ºÏ²¢¹¤¾ß°²×°Ä¿Â¼ÏÂµÄ pattern ÎÄ¼þ¼Ð
