@@ -376,16 +376,16 @@ def download(sid, select_id, output_path, auto_format=False, only_danmu=False):
     if failCheck(slist): return
     if len(slist) > 1:
         print("\n" + "-"*19 + " episode selection " + "-"*19)
-        i = 1
+        i = 0
         for item in slist:
+            i += 1
             ind = str(i)
             string = " "*(5-len(ind)) + ind + ": " + item['title']
             if item['badge']:
                 string += "（%s）" % item['badge']
             print(string)
-            i += 1
-        raw = input("\---episodes(e.g.1-%i,%i): " % (i-2, i-1))
-        index = indexesInput(raw, i - 1)
+        raw = input("\---episodes(e.g.1-%d,%d): " % (i - 1, i))
+        index = indexesInput(raw, i)
         if len(index) == 0:
             return
         eps = []
@@ -397,7 +397,7 @@ def download(sid, select_id, output_path, auto_format=False, only_danmu=False):
         n = len(slist)
         eps = slist
 
-    info = r.geturl(eps[0]['aid'], eps[0]['cid'], is_pcg=True, fnval=2192, fourk=1)    # 最高4K分辨率
+    info = r.geturl(eps[0]['aid'], eps[0]['cid'], is_pgc=True, fnval=2192, fourk=1)    # 最高4K分辨率
     if failCheck(info): return
     vc_list = {13: 'av01(AV1)', 12: 'hev1(H.265)/flv', 7: 'avc1(H.264)'}
     aq_list = {30280: '192K', 30232: '132K', 30216: '64K'}
@@ -476,7 +476,7 @@ def download(sid, select_id, output_path, auto_format=False, only_danmu=False):
             dmDown.start()
             ccDown.start()
         
-        info = r.geturl(ep['aid'], ep['cid'], is_pcg=True, fnval=2192, fourk=1)
+        info = r.geturl(ep['aid'], ep['cid'], is_pgc=True, fnval=2192, fourk=1)
         if failCheck(info): continue
         dash = info['dash']
         ret_v = False; ret_a = False
@@ -494,7 +494,7 @@ def download(sid, select_id, output_path, auto_format=False, only_danmu=False):
             if _vc not in support_vc: _vc = next(_vc, support_vc)
             if _vq not in v_type[_vc]: _vq = next(_vq, v_type[_vc])
             for dic in dash['video']:
-                if dic['id'] == _vq and _dic['codecid'] == _vc:
+                if dic['id'] == _vq and dic['codecid'] == _vc:
                     ret_v = biliDownload(dic, \
                                          join(path, 'video.m4s'), r.sess)
                     break

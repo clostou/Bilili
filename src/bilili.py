@@ -481,7 +481,7 @@ class retrieval():
         params['qn'] = kwargs.get('qn', 80)
         params['fnval'] = kwargs.get('fnval', 16)
         params['fourk'] = kwargs.get('fourk', 0)
-        if is_pcg:
+        if is_pgc:
             url = 'https://api.bilibili.com/pgc/player/web/playurl'
         else:
             url = 'https://api.bilibili.com/x/player/playurl'
