@@ -1,5 +1,5 @@
 # BililiÃüÁîĞĞ¹¤¾ß
-![](https://img.shields.io/badge/FileVer.-1.2.1-orange) ![](https://img.shields.io/badge/Python-3.x-blue) ![](https://img.shields.io/badge/LICENSE-GPLv3-green)
+![](https://img.shields.io/badge/FileVer.-1.2.2-orange) ![](https://img.shields.io/badge/Python-3.x-blue) ![](https://img.shields.io/badge/LICENSE-GPLv3-green)
 ## ¼ò½é
 Bilili£¨ßÙÁ¨Á¨£©ÊÇÒ»¸ö»ùÓÚPython3ºÍßÙÁ¨ßÙÁ¨APIµÄÃüÁîĞĞ¹¤¾ß¡£¸ÃÏîÄ¿ÊµÏÖÁËBÕ¾·¬¾çºÍÓ°ÊÓµÈPGCÀàÊÓÆµµÄ¶àÏß³Ì±¾µØÏÂÔØ£¬»¹Ö§³ÖÊÓÆµËÑË÷¡¢ÕËºÅ¹ÜÀíºÍ¼òµ¥µÄÊÕ²Ø¼Ğ¹¦ÄÜ¡£
 
@@ -108,6 +108,11 @@ Bilili£¨ßÙÁ¨Á¨£©ÊÇÒ»¸ö»ùÓÚPython3ºÍßÙÁ¨ßÙÁ¨APIµÄÃüÁîĞĞ¹¤¾ß¡£¸ÃÏîÄ¿ÊµÏÖÁËBÕ¾·¬¾çº
 **11. exit**
 
     ÍË³ö³ÌĞò
+
+## ³ÌĞòÔ¤ÀÀ
+![µÇÂ¼¡¢ËÑË÷¹¦ÄÜ](dist/preview-1.png)
+
+![ÊÕ²Ø¼Ğ¡¢ÊÓÆµÏÂÔØÓëºÏ²¢¹¦ÄÜ](dist/preview-2.png)
 
 ## Ïà¹Ø
 ³ÌĞòÏÂÔØµÄÎÄ¼şÓëßÙÁ¨ßÙÁ¨AndroidºÍWindows 10¿Í»§¶ËÀàËÆ£¬Îªdash¸ñÊ½£¨ÒôÊÓÆµÊÇ·Ö¿ªµÄÁ½¸öÎÄ¼ş£©¡£Èí¼ş´Ó`v1.2`¿ªÊ¼Ö§³ÖÖ±½Ó×ªÎªmp4¸ñÊ½£¬¶ÔÓÚÖ®Ç°µÄ°æ±¾£¬ºÏ²¢¿ÉÒÔ²Î¿¼ÎÒµÄÁíÒ»¸öÏîÄ¿m4sMerge[^1]¡£
