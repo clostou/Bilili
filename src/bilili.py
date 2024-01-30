@@ -24,6 +24,7 @@ from functools import wraps
 
 from io import StringIO
 import dm_pb2 as dm
+from traceback import format_exc
 
 
 __all__ = ["print", "outputInit", "dictDisp",
@@ -201,11 +202,12 @@ class loginQR():
     def get(self):
         try:
             r = requests.get(\
-                'https://passport.bilibili.com/qrcode/getLoginUrl', \
-                params=appsign({}, *appkey[0]), proxies = self.proxy, \
+                'https://passport.bilibili.com/x/passport-login/web/qrcode/generate', \
+                headers=self.header, params=appsign({}, *appkey[0]), proxies = self.proxy, \
                 timeout=3)
         except:
             print("网络错误 (-200)\n", level=2)
+            print(format_exc())
             return
         if not r.ok:
             print("网络错误 (%i)\n" % r.status_code, level=2)
@@ -215,61 +217,60 @@ class loginQR():
             print("请求失败 (%i)\n" % js['code'], level=2)
             return
         self.qr_url = js['data']['url']
-        self.oauth_key = js['data']['oauthKey']
+        self.oauth_key = js['data']['qrcode_key']
         self.cookies.update(r.cookies)
-        q = qrcode.QRCode(version=8, error_correction=qrcode.ERROR_CORRECT_Q, \
+        q = qrcode.QRCode(version=7, error_correction=qrcode.ERROR_CORRECT_M, \
                           box_size=5)
         q.add_data(self.qr_url)
         q.make(fit=False)
         self.qr_img = q.make_image()
-    
+     
     def show(self, request_interval=1):
         global win_thread
         if self.qr_url ==None or self.oauth_key==None:
             return
         win_thread = _QRWin(self.qr_img)
 
-        params = appsign({'oauthKey':self.oauth_key}, *appkey[0])
+        params = appsign({'qrcode_key':self.oauth_key}, *appkey[0])
         scanned = 0
         while True:
             sleep(request_interval)
             try:
-                r = requests.post(\
-                    'https://passport.bilibili.com/qrcode/getLoginInfo', \
+                r = requests.get(\
+                    'https://passport.bilibili.com/x/passport-login/web/qrcode/poll', \
                     headers=self.header, \
-                    data=params, \
+                    params=params, \
                     cookies=self.cookies, \
                     proxies = self.proxy, \
                     timeout=3)
             except:
                 print("网络错误 (-200)\n", level=2)
+                print(format_exc())
                 break
             if not r.ok:
                 print("网络错误 (%i)\n" % r.status_code, level=2)
                 break
             js = r.json()
-            if not js['status']:
-            #-1：密钥错误；-2：密钥超时；-4：未扫描；-5：未确认
-                if js['data'] == -4:
-                    pass
-                elif js['data'] == -5:
-                    scanned += 1
-                elif js['data'] == -1:
-                    print("密钥错误\n", level=2)
+            if not js['code']:
+                code = js['data']['code']
+                #0：扫码登录成功；86038：密钥超时；86101：未扫描；86090：未确认
+                if code == 0:
+                    self.cookies.update(r.cookies)
+                    self.success = True
+                    print("登录成功！")
                     break
-                elif js['data'] == -2:
+                elif code == 86101:
+                    pass
+                elif code == 86090:
+                    scanned += 1
+                elif code == 86038:
                     print("密钥已超时，请重新登录\n")
                     break
                 else:
                     print("未知错误 (%s)\n" % js['data'], level=2)
                     break
             else:
-                if js['code']:
-                    print("登录失败 (%s)\n" % js['code'], level=2)
-                else:
-                    self.cookies.update(r.cookies)
-                    self.success = True
-                    print("登录成功！")
+                print("登录失败 (%s)\n" % js['code'], level=2)
                 break
             if scanned == 1:
                 win_thread.text("已扫码...请在手机上确认登录")
@@ -971,9 +972,9 @@ def ipLocate():
 if __name__ == '__main__':
     #os.chdir(r'E:\我的文档\Bilibili\PGC下载')
     #path = r'.\0.mp4'
-    #l = loginQR()
-    #l.get()
-    #l.show()
+    l = loginQR()
+    l.get()
+    l.show()
     
     cookies = load(r'.\dist\data_bak\cookies_lgq')
     r = retrieval(cookies)

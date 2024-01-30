@@ -548,12 +548,12 @@ class utils():
     def doc_about(self):
         with open(os.path.join(base_path, 'helpDoc.txt'), \
                   'r', encoding='utf-8') as f:
-            print(f.read(121))
+            print(f.read(119))
 
     def doc_help(self):
         with open(os.path.join(base_path, 'helpDoc.txt'), \
                   'r', encoding='utf-8') as f:
-            f.seek(260)
+            f.seek(259)
             print(f.read())
 
     def clear_temp(self):

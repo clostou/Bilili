@@ -1,15 +1,15 @@
 
-    Bilili（哔哩哩）是一个基于Python3和哔哩哔哩API的命令行工具，作者为Yangwang。该工具主要用于B站番剧和影视等PGC类视频的下载，还支持视频搜索、账号管理和简单的收藏夹功能。
+    Bilili（哔哩哩）是一个基于Python3和哔哩哔哩API的命令行工具，作者为Yangwang(GitHub@clostou)。该工具主要用于B站番剧和影视等PGC类视频的下载，还支持视频搜索、账号管理和简单的收藏夹功能。
 
 [32mlogin [new] {user_name}[0m
     通过用户名(user_name)登录已有账号
     可选字段 new：创建新账号并保存
-[35m    注：某些视频的访问、下载(或高画质下载)可能需要B站账号或大会员账号的登录[0m
+[35m    注：某些视频的访问、下载（或高画质下载）可能需要B站账号或大会员账号的登录 <错误码-404>[0m
 
-[32msearch bangumi | ft {key_word}[0m
-    在B站番剧或影视分区进行关键词(key_word)搜索，并将搜索结果设置为活动列表
-    bangumi：番剧分区
-    或ft：影视分区
+[32msearch[0m
+    在B站番剧或影视分区进行搜索，并将结果设置为活动列表
+    + bangumi {key_word}：在番剧分区搜索关键词key_word
+    + ft {key_word}：在影视分区搜索关键词key_word
 
 [32mfavorite[0m
     简单的收藏夹功能，与账号绑定
@@ -30,8 +30,8 @@
                 favorite delete 3,5,9-
     [32m+ list[0m：列出收藏夹中的全部视频，并将当前收藏夹设置为活动列表
 
-[32mdownload {list_id | 's'+season_id} [-path {save_path}] [-auto] [-only_danmu][0m
-    下载活动列表中编号为list_id的视频
+[32mdownload {list_id | 's'+season_id} [-path {save_path}] [-auto] [-update_danmu][0m
+    下载指定格式的视频，并保存为dash文件
     第一参数 [32mlist_id | 's'+season_id[0m：
         list_id：下载活动列表中编号为list_id的视频
             示例：
@@ -46,15 +46,31 @@
                 下载ssid号为28625的番剧：
                     download s28625
     可选参数 [32m-path {save_path}[0m：
-        设置文件下载路径为save_path
+        设置文件保存路径为save_path
     可选参数 [32m-auto[0m：
-        自动选择音视频格式和清晰度（默认h.265/1080p/192k）
-    可选参数 [32m-only_danmu[0m：
+        自动选择音视频格式和清晰度（默认h.265/1080p+/192k）
+    可选参数 [32m-update_danmu[0m：
         仅下载或更新弹幕
-    [35m注：部分老视频可能不支持h.265编码。若未下载video.m4s视频文件，请将video_codec_id的值设为7[0m
+[35m    注：港澳台地区视频下载（搜索同理）需要开启相应地区的系统代理 <错误码-10403>[0m
+
+[32mmerge [{target}] [-path {save_path}] [-keep_subtitle][0m
+    将先前已下载的视频合并为MP4格式
+    可选参数 [32m{target}[0m：
+        仅合并target指定的目录下的视频
+            示例：
+                1.上一条命令为“download 1”，且视频下载成功
+                  转为MP4格式：
+                      merge
+                2.之前下载了番剧但没有合并，保存在E盘s_6333文件夹中
+                  第二次打开软件，可输入下列指令得到MP4格式的文件：
+                      merge E:\s_6333
+    可选参数 [32m-path {save_path}[0m：
+        设置文件保存路径为save_path
+    可选参数 [32m-keep_subtitle[0m：
+        若视频有cc字幕，则将字幕以srt格式保存于单独的文件夹中（默认会直接把字幕封装在MP4里）
 
 [32mclear[0m
-    清除本地所有缓存数据(登录记录和收藏夹)
+    清除本地所有缓存数据（登录记录和收藏夹）
 
 [32mhelp[0m
     查看命令帮助
@@ -66,4 +82,4 @@
     显示软件版本
 
 [32mexit[0m
-    退出程序
+    退出程序（推荐使用该命令退出而不是直接关闭窗口）
