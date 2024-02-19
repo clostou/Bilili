@@ -64,6 +64,7 @@ def print(*values, level=0, **kwargs):
         _print(profix + sep.join(map(str, values)), **kwargs)
     else:
         _print(*values, **kwargs)
+    sys.stdout.flush()
 
 
 def outputInit():
@@ -942,11 +943,12 @@ def ccDownload(aid, cid, path, cookies=None):
         return js['code']
     subtitles = js['data']['subtitle']['list']
     for item in subtitles:
-        subtitle_data = json.loads(staticDownload(item['subtitle_url']))
-        srt_data = _ccList2srt(subtitle_data['body'])
-        _path = os.path.join(path, '%s.srt' % item['lan'])
-        with open(_path, 'w', encoding='utf-8') as f:
-            f.write(srt_data.getvalue())
+        if item['subtitle_url']:
+            subtitle_data = json.loads(staticDownload(item['subtitle_url']))
+            srt_data = _ccList2srt(subtitle_data['body'])
+            _path = os.path.join(path, '%s.srt' % item['lan'])
+            with open(_path, 'w', encoding='utf-8') as f:
+                f.write(srt_data.getvalue())
 
 
 def ipLocate():

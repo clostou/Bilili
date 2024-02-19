@@ -399,6 +399,9 @@ def download(sid, select_id, output_path, auto_format=False, only_danmu=False):
 
     info = r.geturl(eps[0]['aid'], eps[0]['cid'], is_pgc=True, fnval=2192, fourk=1)    # 最高4K分辨率
     if failCheck(info): return
+    if info['type'] != 'DASH':
+        print("视频格式信息获取失败，请更换账号或分集后重试")
+        return
     vc_list = {13: 'av01(AV1)', 12: 'hev1(H.265)/flv', 7: 'avc1(H.264)'}
     aq_list = {30280: '192K', 30232: '132K', 30216: '64K'}
     support_vc, v_type = vParse(info['dash']['video'])
@@ -478,6 +481,9 @@ def download(sid, select_id, output_path, auto_format=False, only_danmu=False):
         
         info = r.geturl(ep['aid'], ep['cid'], is_pgc=True, fnval=2192, fourk=1)
         if failCheck(info): continue
+        if info['type'] != 'DASH':
+            print("dash资源不可用\n")
+            continue
         dash = info['dash']
         ret_v = False; ret_a = False
         

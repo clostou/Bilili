@@ -123,7 +123,7 @@ def Convert(src_list, dst_path, dm_args=[23, 0.6, 0.667, 12.0, 6.0, 0], embed_cc
                 print('输出文件 "%s.mp4"' % ep['title'])
                 i += 1
             else:
-                print('文件缺失或损坏 "%s"' % os.path.dirname(ep['video']))
+                print('文件缺失或已损坏 "%s"' % os.path.dirname(ep['video']))
             if ep['danmu']:
                 xml2ass(ep['danmu'], join(danmu_path, '%s.ass' % ep['title']), dm_args)
         if not embed_cc and len(os.listdir(cc_path)) == 0:
