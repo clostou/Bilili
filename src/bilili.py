@@ -952,10 +952,16 @@ def ccDownload(aid, cid, path, cookies=None):
 
 
 def ipLocate():
+    header = {
+        'Host': 'api.bilibili.com',
+        'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Macintosh; Intel Mac OS X 10_7_3; Trident/6.0)',
+        'Referer': 'https://www.bilibili.com/'
+    }
     print("---ip地理位置查询......", end='')
     try:
         error_code = -200
         r = requests.get('https://api.bilibili.com/x/web-interface/zone', \
+                         headers=header, \
                          proxies=Proxy(), \
                          timeout=3)
         error_code = r.status_code
@@ -974,9 +980,9 @@ def ipLocate():
 if __name__ == '__main__':
     #os.chdir(r'E:\我的文档\Bilibili\PGC下载')
     #path = r'.\0.mp4'
-    l = loginQR()
-    l.get()
-    l.show()
+    #l = loginQR()
+    #l.get()
+    #l.show()
     
     cookies = load(r'.\dist\data_bak\cookies_lgq')
     r = retrieval(cookies)
@@ -1015,6 +1021,6 @@ if __name__ == '__main__':
     #dictDisp(r.p_list(41472))
     #ccDownload(937955841, 567929070, r'.\')
 
-    #ipLocate()
+    ipLocate()
     pass
 

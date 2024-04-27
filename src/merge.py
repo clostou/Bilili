@@ -11,10 +11,14 @@ from danmaku2ass_light import Danmaku2ASS
 __all__ = ['Convert']
 
 
+def _winfileEscape(text):
+    return text.translate(str.maketrans('\\/:*?<>|.', '＼／：﹡？＜＞｜．')).replace('"', '\'\'')
+
+
 def dirParse(dir_path):
     result = {}
     with open(os.path.join(dir_path, 'info.json'), 'r', encoding='utf-8') as f:
-        result['title'] = json.load(f)['title']
+        result['title'] = _winfileEscape(json.load(f)['title'])
     result['cover'] = ''
     result['eps'] = []
     for file in os.listdir(dir_path):
@@ -22,7 +26,7 @@ def dirParse(dir_path):
         if os.path.isdir(path):
             try:
                 with open(os.path.join(path, 'info.json'), 'r', encoding='utf-8') as f:
-                    ep = {'title': json.load(f)['title']}
+                    ep = {'title': _winfileEscape(json.load(f)['title'])}
                 ep['video'] = os.path.join(path, 'video.m4s')
                 ep['audio'] = os.path.join(path, 'audio.m4s')
                 danmu = os.path.join(path, 'danmaku.xml')
