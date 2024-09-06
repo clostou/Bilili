@@ -108,7 +108,8 @@ def Convert(src_list, dst_path, dm_args=[23, 0.6, 0.667, 12.0, 6.0, 0], embed_cc
             if not input('文件夹 "%s" 已经存在，是否覆盖 (y/n)？' % os.path.abspath(path)) in ['Y', 'y']:
                 continue
             else:
-                shutil.rmtree(path, ignore_errors=True)
+                #shutil.rmtree(path, ignore_errors=True)
+                pass
         os.makedirs(path, exist_ok=True)
         print('创建目录 "%s"：' % result['title'])
         danmu_path = join(path, 'danmuAss')

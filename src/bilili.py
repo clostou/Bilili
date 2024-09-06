@@ -220,7 +220,7 @@ class loginQR():
         self.qr_url = js['data']['url']
         self.oauth_key = js['data']['qrcode_key']
         self.cookies.update(r.cookies)
-        q = qrcode.QRCode(version=7, error_correction=qrcode.ERROR_CORRECT_M, \
+        q = qrcode.QRCode(version=7, error_correction=qrcode.ERROR_CORRECT_L, \
                           box_size=5)
         q.add_data(self.qr_url)
         q.make(fit=False)
@@ -929,10 +929,10 @@ def ccDownload(aid, cid, path, cookies=None):
         'Referer': 'https://www.bilibili.com/'
     }
     params = {'aid': aid, 'cid': cid}
-    url = 'https://api.bilibili.com/x/web-interface/view'
+    url = 'https://api.bilibili.com/x/player/wbi/v2'
     r = requests.get(url, \
                      params=params, \
-                     headers = header, \
+                     headers=header, \
                      cookies=cookies, \
                      proxies=Proxy(), \
                      timeout=3)
@@ -941,10 +941,10 @@ def ccDownload(aid, cid, path, cookies=None):
     js = r.json()
     if js['code']:
         return js['code']
-    subtitles = js['data']['subtitle']['list']
+    subtitles = js['data']['subtitle']['subtitles']
     for item in subtitles:
         if item['subtitle_url']:
-            subtitle_data = json.loads(staticDownload(item['subtitle_url']))
+            subtitle_data = json.loads(staticDownload('https:' + item['subtitle_url']))
             srt_data = _ccList2srt(subtitle_data['body'])
             _path = os.path.join(path, '%s.srt' % item['lan'])
             with open(_path, 'w', encoding='utf-8') as f:
@@ -1019,7 +1019,7 @@ if __name__ == '__main__':
     #r = retrieval(None)
     #dictDisp(r.p_detail(41472))
     #dictDisp(r.p_list(41472))
-    #ccDownload(937955841, 567929070, r'.\')
+    #ccDownload(937955841, 567929070, '.\\', cookies=r.sess)
 
     ipLocate()
     pass
